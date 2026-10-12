@@ -1,0 +1,1051 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Hueytown Rush Forecaster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: sticky command bar over one working surface. Scheduler = forecast hero, KPIs, week strip, charts, hour table.
+   On the Floor = live status + day progress rail, crew, lineup, game plan. Dark-only by design (Hueytown tool suite), iPad-first. */
+:root{
+  --bg:#110D0F; --bg2:#17121A; --panel:#1B1619; --panel2:#241E21; --panel3:#2E272B; --line:#352C30; --hi:rgba(255,255,255,.05);
+  --fg:#F6F0F2; --muted:#B5A8AD; --faint:#76696F;
+  --red:#E51636; --red2:#B80F2B; --redsoft:#35141C; --redtext:#FF5C77; --glow:rgba(229,22,54,.35);
+  --ok:#3DC48D; --oksoft:#112B22; --warn:#F2AA3C; --warnsoft:#33260F; --foh:#6FA9FF; --fohsoft:#152340; --band:rgba(246,240,242,.07);
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:17px;line-height:1.5;padding:0 16px 56px;
+  background:radial-gradient(1200px 500px at 85% -120px,rgba(229,22,54,.10),transparent 60%),var(--bg)}
+.wrap{max-width:1200px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:.01em;text-wrap:balance}
+.num{font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+
+/* ---- command bar ---- */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;padding-block:14px 12px;display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center;
+  background:linear-gradient(var(--bg) 70%,rgba(17,13,15,.85));backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto;min-width:0}
+.mark{width:44px;height:44px;flex:none;border-radius:12px;background:linear-gradient(145deg,var(--red),var(--red2));display:grid;place-items:center;box-shadow:0 6px 18px var(--glow)}
+.mark svg{width:26px;height:26px}
+.brand h1{font-size:28px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;line-height:1}
+.brand .sub{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--panel2);color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.chip.sample{background:var(--warnsoft);color:var(--warn)} .chip.file{background:var(--oksoft);color:var(--ok)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;min-height:48px;transition:border-color .2s,background .2s,transform .15s}
+.btn:hover{border-color:var(--muted)} .btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(180deg,var(--red),var(--red2));border-color:transparent;color:#fff;box-shadow:0 4px 14px var(--glow)}
+select{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:48px;font-weight:700}
+.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px}
+.seg .pill{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:10px;background:linear-gradient(180deg,var(--red),var(--red2));box-shadow:0 4px 14px var(--glow);transition:transform .35s var(--ease)}
+.seg[data-mode="floor"] .pill{transform:translateX(100%)}
+.seg button{position:relative;z-index:1;border:0;background:transparent;padding:8px 18px;font-family:var(--display);font-size:19px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);cursor:pointer;min-height:42px;transition:color .3s;white-space:nowrap}
+.seg button[aria-pressed="true"]{color:#fff}
+
+/* ---- surfaces ---- */
+main{display:grid;gap:18px;padding-block:22px}
+.card{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0;box-shadow:inset 0 1px 0 var(--hi),0 10px 30px rgba(0,0,0,.25)}
+.card h2{font-size:21px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px;display:flex;justify-content:space-between;gap:6px 12px;flex-wrap:wrap;align-items:baseline}
+.card h2 small{font-family:var(--body);font-size:14px;text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400}
+.label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px}
+.note{font-size:14px;color:var(--muted)}
+.good{color:var(--ok)} .bad{color:var(--redtext)} .meh{color:var(--warn)}
+.f{color:var(--foh)} .b{color:var(--redtext)}
+
+/* hero */
+.hero{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between}
+.hero h2{font-size:clamp(38px,6vw,60px);font-weight:800;text-transform:uppercase;line-height:.95;letter-spacing:.01em}
+.hero h2 em{font-style:normal;color:var(--red)}
+.hero p{margin:8px 0 0;color:var(--muted);max-width:68ch}
+.acc{display:grid;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:12px 16px;min-width:min(100%,250px)}
+.acc .v{font-family:var(--display);font-size:32px;font-weight:700;line-height:1}
+.meter{height:8px;border-radius:99px;background:var(--panel3);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--ok),#7EE0B5);transform-origin:left;animation:fill 1s var(--ease) both .2s}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:12px}
+.kpi{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0;box-shadow:inset 0 1px 0 var(--hi)}
+.kpi .v{font-family:var(--display);font-size:40px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:14px;color:var(--muted)}
+
+/* week strip */
+.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}
+.wd{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:4px;padding:12px 14px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);transition:border-color .2s,transform .2s var(--ease),background .2s}
+.wd:hover{transform:translateY(-2px);border-color:var(--faint)}
+.wd:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.wd[aria-current="true"]{border-color:var(--red);background:linear-gradient(180deg,var(--redsoft),var(--panel2));box-shadow:0 6px 18px rgba(229,22,54,.18)}
+.wd .dn{font-family:var(--display);font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between}
+.wd .dn span{font-family:var(--body);font-size:12px;color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none}
+.wd .ws{font-family:var(--display);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.wd .wc{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wd svg{width:100%;height:34px;display:block}
+
+.chart{width:100%;overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:640px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;font-size:14px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+.dayparts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.dp{background:var(--panel2);border-radius:14px;padding:14px;display:grid;gap:6px;border:1px solid var(--line)}
+.dp h3{font-size:22px;text-transform:uppercase;font-weight:700}
+.dp .row{display:flex;justify-content:space-between;gap:8px;font-size:15px}
+.dp .row b{font-variant-numeric:tabular-nums}
+
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:600px}
+th,td{padding:11px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+th:first-child,td:first-child,th:last-child,td:last-child{text-align:left}
+tbody tr{transition:background .2s} tbody tr:hover{background:var(--panel2)}
+tr.rush td:first-child{box-shadow:inset 4px 0 0 var(--red)}
+td .f,td .b{font-weight:700}
+.move{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-block}
+.move.add{background:var(--oksoft);color:var(--ok)} .move.cut{background:var(--warnsoft);color:var(--warn)}
+.rng{color:var(--faint);font-size:13px}
+
+/* ---- floor ---- */
+.timepick{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;min-height:48px}
+.toggle input{width:22px;height:22px;accent-color:var(--red)}
+.status{position:relative;overflow:hidden;border-radius:20px;padding:22px 24px 20px;display:grid;gap:8px;border:1px solid var(--line);background:var(--panel)}
+.status::after{content:"";position:absolute;inset:auto -10% -60% auto;width:60%;height:140%;background:radial-gradient(closest-side,var(--sglow,transparent),transparent);pointer-events:none}
+.status .tag{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:18px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.status .dot{width:12px;height:12px;border-radius:50%;background:currentColor;position:relative}
+.status .dot::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid currentColor;opacity:0;animation:ring 1.8s ease-out infinite}
+.status h2{font-size:clamp(34px,6vw,56px);font-weight:800;line-height:.98;text-transform:uppercase;position:relative;z-index:1}
+.status p{margin:0;font-size:19px;color:var(--muted);max-width:70ch;position:relative;z-index:1}
+.status.inrush{border-color:var(--red);background:linear-gradient(135deg,var(--redsoft),var(--panel));--sglow:rgba(229,22,54,.35)} .status.inrush .tag{color:var(--redtext)}
+.status.coming{border-color:var(--warn);background:linear-gradient(135deg,var(--warnsoft),var(--panel));--sglow:rgba(242,170,60,.25)} .status.coming .tag{color:var(--warn)}
+.status.steady{border-color:#245441;background:linear-gradient(135deg,var(--oksoft),var(--panel));--sglow:rgba(61,196,141,.18)} .status.steady .tag{color:var(--ok)}
+.status.closed .tag{color:var(--muted)} .status.closed .dot::after{display:none}
+
+.rail{position:relative;height:44px;margin-top:10px;border-radius:12px;background:var(--panel3);overflow:hidden;z-index:1}
+.rail .seg2{position:absolute;top:0;bottom:0}
+.rail .r{background:linear-gradient(180deg,var(--red),var(--red2))} .rail .s{background:rgba(242,170,60,.45)} .rail .k{background:rgba(61,196,141,.35)}
+.rail .done{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.45);transition:width 1s var(--ease)}
+.rail .nowm{position:absolute;top:-2px;bottom:-2px;width:3px;background:var(--fg);box-shadow:0 0 12px rgba(255,255,255,.8);transition:left 1s var(--ease)}
+/* interactive rail */
+.rail{height:56px;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.rail:focus-visible{outline:3px solid var(--warn);outline-offset:3px}
+.rail .pm{position:absolute;top:0;bottom:0;width:4px;background:var(--warn);box-shadow:0 0 14px rgba(242,170,60,.9);pointer-events:none;z-index:2}
+.rail .pm b{position:absolute;top:4px;left:8px;font-family:var(--display);font-size:16px;font-weight:700;background:var(--bg);color:var(--warn);padding:1px 6px;border-radius:6px;white-space:nowrap}
+.railhint{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:13px;color:var(--muted);position:relative;z-index:1}
+.railhint .lgd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 8px;vertical-align:-1px}
+.railhint .lgd i.r{background:var(--red)} .railhint .lgd i.s{background:rgba(242,170,60,.6)} .railhint .lgd i.k{background:rgba(61,196,141,.55)}
+.probe{position:relative;z-index:1;margin-top:12px;background:var(--panel2);border:1px solid var(--warn);border-radius:16px;padding:14px 16px;display:grid;gap:10px;animation:rise .3s var(--ease) both}
+.probe .ph{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
+.probe .pt2{font-family:var(--display);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.probe .zp{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:999px;background:var(--panel3)}
+.probe .zp.bad{background:var(--redsoft)} .probe .zp.meh{background:var(--warnsoft)} .probe .zp.good{background:var(--oksoft)}
+.probe .zd{margin:0;font-size:16px;color:var(--fg)}
+.probe .pgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.probe .pgrid > div{display:grid;gap:2px;background:var(--panel3);border-radius:10px;padding:8px 10px;min-width:0}
+.probe .pgrid b{font-family:var(--display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.probe .pbtns{display:flex;flex-wrap:wrap;gap:8px}
+.probe .pbtns .primary{flex:1 1 180px}
+@media (max-width:480px){.probe .pgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.rail{height:64px}}
+.pk.tap{cursor:pointer;transition:transform .15s,border-color .2s}.pk.tap:active{transform:scale(.98)}
+.railx{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px;position:relative;z-index:1;font-variant-numeric:tabular-nums}
+
+.big{font-family:var(--display);font-size:58px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.mid{font-family:var(--display);font-size:38px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.crew{display:flex;gap:26px;flex-wrap:wrap}
+.crew > div{display:grid;gap:2px}
+.callout{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:17px;margin:16px 0 0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:18px}
+.cols h3{font-size:20px;text-transform:uppercase;margin-bottom:10px;letter-spacing:.04em}
+.stations{display:grid;gap:8px}
+.st{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:700}
+.st .n{font-family:var(--display);font-size:26px;text-align:right;font-variant-numeric:tabular-nums}
+.st .cap{grid-column:1/-1;height:5px;border-radius:9px;background:var(--panel3);overflow:hidden}
+.st .cap i{display:block;height:100%;border-radius:9px;transform-origin:left;animation:fill .7s var(--ease) both;animation-delay:calc(var(--d,0)*50ms)}
+.st.zero{opacity:.4}
+.plan{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.plan > li{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:start;padding:13px 15px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--faint)}
+.plan > li.rush,.plan > li.ready{border-left-color:var(--red)} .plan > li.stock,.plan > li.reset,.plan > li.cut{border-left-color:var(--warn)}
+.plan > li.break{border-left-color:var(--ok)} .plan > li.add{border-left-color:var(--foh)}
+.plan > li.past{opacity:.45}
+.plan > li.next{box-shadow:0 0 0 1px var(--fg) inset}
+.plan .t{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.plan .what{font-weight:700;font-size:18px}
+.plan .det{color:var(--muted);font-size:15px}
+.plan ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:15px}
+.breaks{display:grid;gap:10px}
+.bw{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.bw.best{background:var(--oksoft);border-color:var(--ok)}
+.bw b{font-family:var(--display);font-size:22px}
+
+/* daypart peaks */
+.peaks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px}
+.pk{display:grid;gap:4px;align-content:start;padding:14px 16px;border-radius:16px;background:var(--panel2);border:1px solid var(--line);border-top:4px solid var(--faint);animation:rise .55s var(--ease) both;animation-delay:calc(var(--d,0)*80ms + 150ms)}
+.pk.big{border-top-color:var(--red)} .pk.medium{border-top-color:var(--redtext)} .pk.light{border-top-color:var(--warn)}
+.pk.none{opacity:.7} .pk.done{opacity:.45} .pk.focus{box-shadow:0 0 0 2px var(--fg) inset}
+.pkh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pk h3{font-size:22px;text-transform:uppercase;font-weight:700;letter-spacing:.03em}
+.pk .lv{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;background:var(--panel3);color:var(--muted)}
+.pk.big .lv{background:var(--redsoft);color:var(--redtext)} .pk.medium .lv{background:var(--redsoft);color:var(--redtext)} .pk.light .lv{background:var(--warnsoft);color:var(--warn)}
+.pk .pt{font-family:var(--display);font-size:46px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.peaks.small .pk .pt{font-size:36px}
+.pk .win{font-size:15px;color:var(--muted);margin-bottom:6px;font-variant-numeric:tabular-nums} .pk .win b{color:var(--fg)}
+.pk .row{display:flex;justify-content:space-between;gap:8px;font-size:15px;border-top:1px solid var(--line);padding-top:6px}
+.pk .row b{font-variant-numeric:tabular-nums}
+.wpk{display:flex;flex-wrap:wrap;gap:4px}
+.wpk span{font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--redsoft);color:var(--redtext);font-variant-numeric:tabular-nums}
+.wpk span.light{background:var(--warnsoft);color:var(--warn)}
+
+/* countdown */
+.cd{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;position:relative;z-index:1}
+.cdv{font-family:var(--display);font-size:clamp(30px,5vw,44px);font-weight:700;line-height:1;color:var(--fg)}
+
+/* shift builder gantt */
+.gantt{display:grid;gap:22px}
+.gcol h3{font-size:20px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.gcol h3.f{color:var(--foh)} .gcol h3.b{color:var(--redtext)}
+.gaxis{position:relative;height:18px;margin-left:78px;margin-right:132px;font-size:11px;color:var(--muted)}
+.gaxis span{position:absolute;transform:translateX(-50%);white-space:nowrap;font-variant-numeric:tabular-nums}
+.gr{display:grid;grid-template-columns:70px 1fr 124px;gap:8px;align-items:center;padding-block:3px}
+.gt{position:relative;height:22px;border-radius:7px;background:var(--panel2);overflow:hidden}
+.gt b{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+.gt i{position:absolute;top:3px;bottom:3px;border-radius:5px;transform-origin:left;animation:fill .7s var(--ease) both;animation-delay:calc(var(--d,0)*35ms + 150ms)}
+.gt i.f{background:linear-gradient(90deg,var(--foh),#9CC4FF)} .gt i.b{background:linear-gradient(90deg,var(--red),#FF5C77)}
+.gh{font-size:13px;color:var(--muted);white-space:nowrap}
+.gtag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 0;border-radius:6px;text-align:center;background:var(--panel3);color:var(--muted)}
+.gtag.t-am{background:var(--fohsoft);color:var(--foh)} .gtag.t-open{background:var(--fohsoft);color:var(--foh)} .gtag.t-lunch{background:var(--redsoft);color:var(--redtext)} .gtag.t-dinner{background:var(--warnsoft);color:var(--warn)} .gtag.t-close{background:var(--oksoft);color:var(--ok)}
+@media (max-width:640px){.gr{grid-template-columns:56px 1fr;}.gh{grid-column:2;margin-top:-4px}.gaxis{margin-left:64px;margin-right:0}}
+
+/* kitchen TV */
+body.tvmode{padding-inline:clamp(16px,3vw,40px)}
+body.tvmode .bar,body.tvmode details.settings,body.tvmode #msg{display:none}
+body.tvmode .wrap{max-width:none}
+.tv{display:grid;gap:22px;padding-block:18px}
+.tvtop{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.tvbrand{font-family:var(--display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-right:auto}
+.tvclock{font-family:var(--display);font-size:40px;font-weight:700}
+.tvmain{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:22px;align-items:stretch}
+.tvstatus,.tvcd,.tvbox{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px;display:grid;gap:8px;align-content:start;min-width:0}
+.tvstatus .tag{display:flex;align-items:center;gap:12px;font-family:var(--display);font-size:24px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.tvstatus .dot{width:16px;height:16px;border-radius:50%;background:currentColor;position:relative}
+.tvstatus .dot::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid currentColor;animation:ring 1.8s ease-out infinite}
+.tvstatus h2{font-size:clamp(44px,6vw,84px);font-weight:800;line-height:.95;text-transform:uppercase}
+.tvstatus p{margin:0;font-size:22px;color:var(--muted)}
+.tv.inrush .tvstatus{border-color:var(--red);background:linear-gradient(135deg,var(--redsoft),var(--panel))} .tv.inrush .tag{color:var(--redtext)}
+.tv.coming .tvstatus{border-color:var(--warn);background:linear-gradient(135deg,var(--warnsoft),var(--panel))} .tv.coming .tag{color:var(--warn)}
+.tv.steady .tag{color:var(--ok)}
+.tvcd{place-content:center;text-align:center}
+.tvcd .num{font-family:var(--display);font-size:clamp(80px,12vw,180px);font-weight:800;line-height:.9}
+.tv.inrush .tvcd .num{color:var(--redtext)} .tv.coming .tvcd .num{color:var(--warn)}
+.tvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:22px}
+.tvbox.wide{grid-column:span 2} @media (max-width:760px){.tvbox.wide{grid-column:auto}}
+.tvnums{display:flex;gap:34px}
+.tvnums span{font-family:var(--display);font-size:clamp(70px,9vw,120px);font-weight:700;line-height:.9;display:grid}
+.tvnums small{font-size:20px;letter-spacing:.1em;color:var(--muted)}
+.tvchips{display:flex;flex-wrap:wrap;gap:10px}
+.tvchip{display:inline-flex;align-items:center;gap:10px;padding:8px 14px;border-radius:12px;background:var(--panel2);font-weight:700;font-size:20px}
+.tvchip b{font-family:var(--display);font-size:30px}
+.tvchip.b b{color:var(--redtext)} .tvchip.f b{color:var(--foh)}
+.tvnext{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.tvnext li{display:flex;gap:16px;align-items:baseline;font-size:22px;font-weight:700;padding:10px 14px;border-radius:12px;background:var(--panel2);border-left:6px solid var(--faint)}
+.tvnext li b{font-family:var(--display);font-size:28px;min-width:4.6ch}
+.tvnext li.rush,.tvnext li.ready{border-left-color:var(--red)} .tvnext li.stock,.tvnext li.reset,.tvnext li.cut{border-left-color:var(--warn)} .tvnext li.break{border-left-color:var(--ok)} .tvnext li.add{border-left-color:var(--foh)}
+.tvpeaks{display:flex;flex-wrap:wrap;gap:12px}
+.tvpeaks span{font-family:var(--display);font-size:24px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 16px;border-radius:999px;background:var(--panel2);color:var(--muted)}
+.tvpeaks span b{color:var(--fg);margin-left:6px}
+.tvpeaks span.on{background:var(--red);color:#fff} .tvpeaks span.on b{color:#fff} .tvpeaks span.done{opacity:.4}
+
+/* settings */
+details.settings{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:6px 20px}
+details.settings summary{cursor:pointer;font-family:var(--display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:12px 0;min-height:48px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px;padding-block:6px 16px}
+.form label{display:grid;gap:4px;font-weight:700;font-size:15px}
+.form label span{font-weight:400;color:var(--muted);font-size:13px}
+.form input,.form select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px;font-variant-numeric:tabular-nums;width:100%}
+pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto;font-size:14px;color:var(--muted)}
+.err{background:var(--redsoft);border:1px solid var(--red);border-radius:14px;padding:12px 16px;font-weight:700;margin-top:14px}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ok);color:#06140e;font-weight:700;padding:12px 22px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:rise .35s var(--ease) both;z-index:20}
+
+/* ---- motion ---- */
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+@keyframes grow{from{transform:scaleY(0)}}
+@keyframes fill{from{transform:scaleX(0)}}
+@keyframes ring{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.8);opacity:0}}
+@keyframes draw{from{stroke-dashoffset:var(--len,600)}}
+.rv{animation:rise .55s var(--ease) both;animation-delay:calc(var(--d,0)*70ms)}
+.gb{transform-box:fill-box;transform-origin:50% 100%;animation:grow .7s var(--ease) both;animation-delay:calc(var(--i,0)*7ms + 120ms)}
+.spark{stroke-dasharray:var(--len,600);animation:draw 1.1s var(--ease) both .2s}
+#app.calm *, #app.calm *::before, #app.calm *::after{animation:none!important}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+@media (max-width:640px){
+  body{font-size:16px}
+  .brand h1{font-size:22px} .mark{width:38px;height:38px}
+  .seg button{padding:8px 10px;font-size:16px}
+  .plan > li{grid-template-columns:1fr;gap:4px}
+  .big{font-size:46px}
+}
+</style>
+
+<div class="wrap">
+  <header class="bar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M12 2.5v3.5M18.5 7l1.6-1.6"/></svg></div>
+      <div style="min-width:0">
+        <h1>Rush Forecaster</h1>
+        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="btn primary" for="csvFile" style="display:inline-flex;align-items:center">Upload CSVs</label>
+      <input type="file" id="csvFile" accept=".csv,text/csv,.txt" multiple hidden>
+      <select id="daySel" aria-label="Day to forecast"></select>
+      <div class="seg" id="seg" role="group" aria-label="Mode">
+        <span class="pill" aria-hidden="true"></span>
+        <button id="mSched" type="button">Scheduler</button>
+        <button id="mFloor" type="button">On the Floor</button>
+      </div>
+    </div>
+  </header>
+  <div id="msg"></div>
+  <main id="app"></main>
+
+  <details class="settings" id="settingsBox">
+    <summary>Forecast settings</summary>
+    <div class="form">
+      <label for="s_method">Averaging<span>Smart drops each slot's best and worst day and leans on recent weeks</span>
+        <select id="s_method"><option value="smart">Smart average (recommended)</option><option value="straight">Straight average</option></select></label>
+      <label for="s_plan">Plan for<span>Busy day staffs to a better-than-usual day (80th percentile)</span>
+        <select id="s_plan"><option value="typical">Typical day</option><option value="busy">Busy day</option></select></label>
+      <label for="s_splh">SPLH target<span>Sales per labor hour for normal periods</span><input id="s_splh" type="number" min="20" step="1"></label>
+      <label for="s_rushSplh">Rush SPLH<span>How hard the crew runs during a rush</span><input id="s_rushSplh" type="number" min="20" step="1"></label>
+      <label for="s_boh">BOH share of crew (%)<span>The rest goes to FOH</span><input id="s_boh" type="number" min="20" max="70" step="1"></label>
+      <label for="s_minFoh">Minimum FOH<span>Never schedule below this</span><input id="s_minFoh" type="number" min="1" step="1"></label>
+      <label for="s_minBoh">Minimum BOH<span>Opening centerline is 3</span><input id="s_minBoh" type="number" min="1" step="1"></label>
+      <label for="s_minShift">Shortest shift (hrs)<span>Shift Builder won't schedule anything shorter</span><input id="s_minShift" type="number" min="2" max="8" step="0.5"></label>
+      <label for="s_maxShift">Longest shift (hrs)<span>Longer coverage gets split into two shifts</span><input id="s_maxShift" type="number" min="4" max="12" step="0.5"></label>
+      <label for="s_bridge">Keep crew through dips (min)<span>If the need comes back within this long, nobody gets cut</span><input id="s_bridge" type="number" min="0" max="180" step="15"></label>
+      <label for="s_preOpen">Opening crew in early (min)<span>Before the first sale. Opening centerline.</span><input id="s_preOpen" type="number" min="0" max="120" step="15"></label>
+      <label for="s_postClose">Closing crew stays (min)<span>After the last sale, for close-down</span><input id="s_postClose" type="number" min="0" max="120" step="15"></label>
+      <label for="s_wage">Average wage ($/hr)<span>Used for the labor % estimate</span><input id="s_wage" type="number" min="7" step="0.25"></label>
+      <label for="s_adj">Sales adjustment (%)<span>+10 for a promo day, −15 for bad weather</span><input id="s_adj" type="number" step="1"></label>
+      <label for="s_win">Rush window (%)<span>15s within this % of a daypart's peak count as its rush</span><input id="s_win" type="number" min="40" max="95" step="5"></label>
+      <label for="s_sens">Big rush level<span>1.35 = peak runs 35% above the day's average. Big rushes staff at Rush SPLH.</span><input id="s_sens" type="number" min="1.05" max="3" step="0.05"></label>
+    </div>
+    <div class="controls" style="padding-bottom:16px">
+      <button class="btn" id="resetSettings" type="button">Reset settings</button>
+      <button class="btn" id="useSample" type="button">Clear my data, use sample</button>
+    </div>
+    <details style="padding-bottom:16px">
+      <summary class="label" style="cursor:pointer;padding:6px 0">What CSV works?</summary>
+      <p class="note">Any export with a time column and a sales column, plus a date column so the tool can sort days by weekday. Upload one big file or a stack of daily files at once. Each upload adds to what's already loaded, and a re-uploaded day replaces the old copy. Four or more of the same weekday gives the best counts.</p>
+<pre class="fmt">Date,Time,Net Sales,Transactions
+9/22/2026,6:00 AM,84.50,9
+9/22/2026,6:15 AM,112.20,12
+9/22/2026,6:30 AM,140.75,15</pre>
+    </details>
+  </details>
+</div>
+
+<script>
+/* ===== storage ===== */
+function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function drop(k){try{localStorage.removeItem(k)}catch(e){}}
+
+const DEF={bridge:60,minShift:4,maxShift:8,preOpen:30,postClose:30,win:70,method:'smart',plan:'typical',splh:70,rushSplh:90,boh:45,minFoh:3,minBoh:3,wage:14,adj:0,sens:1.35};
+let S=Object.assign({},DEF,load('rf_settings')||{});Object.keys(DEF).forEach(k=>{if(S[k]==null)S[k]=DEF[k]});
+let DATA=load('rf_data2');
+let MODE=load('rf_mode')||'sched';
+let DAY=null, LIVE=true, NOW=null, timer=null;
+const WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dayNum=(y,m,d)=>Math.round(Date.UTC(y,m-1,d)/86400000);
+
+/* ===== sample: 4 weeks, Mon–Sat, clearly marked ===== */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function makeSample(){
+  const R=rng(6123),rows=[];
+  const P={1:[.9,.9,.85,735],2:[.9,.95,.9,735],3:[.95,1,.95,735],4:[1,1,1,735],5:[1.05,1.15,1.25,740],6:[1.3,1.1,1.05,760]};
+  const g=(t,c,a,sd)=>a*Math.exp(-((t-c)**2)/(2*sd*sd));
+  for(let k=0;k<27;k++){
+    const dt=new Date(2026,7,31+k);const wd=dt.getDay();if(wd===0)continue;
+    const key=`${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`;const dn=dayNum(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
+    const [bf,lu,di,lc]=P[wd];const day=0.95+R()*0.1;
+    const spike=(key==='9/17/2026')?1.6:(key==='9/9/2026'?0.7:1); // a catering-heavy Thursday, a storm Wednesday
+    for(let m=360;m<1320;m+=15){
+      const t=m+7.5;
+      let s=55+g(t,465,230*bf,45)+g(t,lc,560*lu*(t>650&&t<840?spike:1),52)+g(t,1065,300*di,55)+g(t,900,25,60);
+      if(m<390)s*=0.7; if(m>=1260)s*=0.75;
+      s*=day*(0.92+R()*0.16)*(spike===0.7?0.85:1);
+      rows.push([key,wd,m,Math.round(s*100)/100,Math.round(s/11.5),dn]);
+    }
+  }
+  return {name:'Sample',sample:true,rows};
+}
+if(!DATA) DATA=makeSample();
+
+/* ===== CSV parsing ===== */
+function splitCSV(line){
+  const out=[];let cur='',q=false;
+  for(let i=0;i<line.length;i++){const c=line[i];
+    if(q){if(c==='"'){if(line[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else if(c==='"')q=true;else if(c===','){out.push(cur);cur=''}else cur+=c}
+  out.push(cur);return out.map(s=>s.trim());
+}
+const TIME_RE=/(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap])?\.?m?\.?/ig;
+function timesIn(str){const res=[];let m;TIME_RE.lastIndex=0;while((m=TIME_RE.exec(str)))res.push({h:+m[1],m:+m[2],ap:m[3]?m[3].toLowerCase():null});return res}
+function to24(t,ap){let h=t.h%12;if(ap==='p')h+=12;if(!ap)h=t.h;return h*60+t.m}
+function parseTime(str){
+  const ts=timesIn(str);if(!ts.length)return null;const a=ts[0];
+  if(a.ap)return to24(a,a.ap);
+  const later=ts.find(x=>x.ap);
+  if(later){const end=to24(later,later.ap);let best=0,bd=1e9;[to24(a,'a'),to24(a,'p')].forEach(o=>{let d=end-o;if(d<=0)d+=1440;if(d<bd){bd=d;best=o}});return best}
+  return {raw:(a.h>=1&&a.h<=5?a.h+12:a.h)*60+a.m,noap:true};
+}
+function parseDate(str){
+  let m=str.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return {key:`${+m[2]}/${+m[3]}/${m[1]}`,wd:new Date(+m[1],+m[2]-1,+m[3]).getDay(),dn:dayNum(+m[1],+m[2],+m[3])};
+  m=str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(m){let y=+m[3];if(y<100)y+=2000;return {key:`${+m[1]}/${+m[2]}/${y}`,wd:new Date(y,+m[1]-1,+m[2]).getDay(),dn:dayNum(y,+m[1],+m[2])}}
+  return null;
+}
+function money2num(s){if(s==null)return NaN;s=String(s).trim();const neg=/^\(.*\)$/.test(s)||s.startsWith('-');const n=parseFloat(s.replace(/[^0-9.]/g,''));return neg?-n:n}
+function parseCSV(text,fileName){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  if(lines.length<2)throw new Error(`${fileName}: the file looks empty.`);
+  const rows=lines.map(splitCSV),head=rows[0].map(h=>h.toLowerCase());
+  const hasHeader=!timesIn(rows[0].join(' ')).length;const body=hasHeader?rows.slice(1):rows;
+  const find=re=>head.findIndex(h=>re.test(h));
+  let ti=-1,di=-1,si=-1,xi=-1;
+  if(hasHeader){
+    ti=find(/time|interval|period|hour|start|slot/);
+    di=head.findIndex(h=>/date|business|day/.test(h)&&!/daypart|part/.test(h));
+    si=find(/net/);if(si<0)si=find(/sales|gross|amount|revenue|total|\$/);
+    xi=find(/trans|count|orders|checks|guests|\btc\b|tickets/);
+    if(si===ti||si===di)si=-1;
+  }
+  const ncol=Math.max(...body.slice(0,20).map(r=>r.length));
+  if(ti<0){for(let c=0;c<ncol;c++){if(body.slice(0,10).some(r=>r[c]&&timesIn(r[c]).length)){ti=c;break}}}
+  if(ti<0)throw new Error(`${fileName}: couldn't find a time column. It needs times like 6:00 AM or 06:00.`);
+  if(si<0){let best=-1,bs=-1;
+    for(let c=0;c<ncol;c++){if(c===ti||c===di||c===xi)continue;let sum=0,ok=0;
+      body.forEach(r=>{const v=money2num(r[c]);if(!isNaN(v)&&!timesIn(r[c]||'').length&&!/\//.test(r[c]||'')){sum+=v;ok++}});
+      if(ok>body.length*0.6&&sum>bs){bs=sum;best=c}}
+    si=best}
+  if(si<0)throw new Error(`${fileName}: couldn't find a sales column. Name it "Sales" or "Net Sales".`);
+  const out=[],pending=[];
+  const fallback=parseDate(fileName)||{key:fileName,wd:null,dn:null};
+  body.forEach(r=>{
+    const tstr=r[ti]||'';const t=parseTime(tstr);if(t==null)return;
+    const sales=money2num(r[si]);if(isNaN(sales))return;
+    const d=parseDate(di>=0?(r[di]||''):tstr)||parseDate(tstr)||fallback;
+    const trans=xi>=0?money2num(r[xi]):NaN;
+    const row=[d.key,d.wd,t,sales,isNaN(trans)?null:trans,d.dn];out.push(row);if(t&&t.noap)pending.push(row);
+  });
+  if(pending.length){const byDate={};pending.forEach(r=>(byDate[r[0]]=byDate[r[0]]||[]).push(r));
+    Object.values(byDate).forEach(list=>{let prev=-1,add=0;list.forEach(r=>{let v=r[2].raw+add;if(prev>=0&&v<prev-60){add+=720;v+=720}r[2]=v;prev=v})})}
+  if(out.length<4)throw new Error(`${fileName}: only ${out.length} usable rows. Is this the 15-minute sales export?`);
+  return out;
+}
+
+/* ===== forecast engine: every day in the file ===== */
+function datesFor(day){
+  const by=new Map();
+  DATA.rows.forEach(r=>{if(day!=='all'&&String(r[1])!==day)return;
+    let d=by.get(r[0]);if(!d){d={key:r[0],wd:r[1],dn:r[5],map:new Map()};by.set(r[0],d)}
+    const o=d.map.get(r[2])||{s:0,t:null};o.s+=r[3];if(r[4]!=null)o.t=(o.t||0)+r[4];d.map.set(r[2],o)});
+  return [...by.values()].filter(d=>[...d.map.values()].some(o=>o.s>0)).sort((a,b)=>(a.dn??0)-(b.dn??0));
+}
+function pct(arr,p){const a=[...arr].sort((x,y)=>x-y);if(!a.length)return 0;const i=(a.length-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return a[lo]+(a[hi]-a[lo])*(i-lo)}
+function forecastFrom(dates,opts={}){
+  if(!dates.length)return [];
+  const method=opts.method||S.method,plan=opts.plan||S.plan,adj=opts.adj??S.adj;
+  const mins=[...new Set(dates.flatMap(d=>[...d.map.keys()]))].sort((a,b)=>a-b);
+  const latest=Math.max(...dates.map(d=>d.dn??-Infinity));
+  const wt=d=>method==='smart'&&d.dn!=null&&isFinite(latest)?Math.pow(0.85,Math.floor((latest-d.dn)/7)):1;
+  const f=1+(+adj||0)/100;
+  return mins.map(min=>{
+    let vals=dates.map(d=>{const o=d.map.get(min);return {v:o?o.s:0,t:o?o.t:null,w:wt(d)}});
+    const raw=vals.map(x=>x.v);
+    if(method==='smart'&&vals.length>=4){vals=[...vals].sort((a,b)=>a.v-b.v).slice(1,-1)}
+    const W=vals.reduce((s,x)=>s+x.w,0)||1;
+    const avg=vals.reduce((s,x)=>s+x.v*x.w,0)/W;
+    const tv=vals.filter(x=>x.t!=null);const trans=tv.length?tv.reduce((s,x)=>s+x.t*x.w,0)/(tv.reduce((s,x)=>s+x.w,0)||1):null;
+    const low=pct(raw,.2),high=pct(raw,.8);
+    const base=plan==='busy'?Math.max(avg,high):avg;
+    return {min,sales:base*f,avg:avg*f,low:low*f,high:high*f,trans:trans!=null?trans*f*(plan==='busy'&&avg>0?base/avg:1):null};
+  });
+}
+function backtestDay(day){
+  const ds=datesFor(day);if(ds.length<3)return null;
+  const last=ds[ds.length-1],fc=forecastFrom(ds.slice(0,-1),{plan:'typical',adj:0});
+  let err=0,act=0,pred=0;
+  fc.forEach(r=>{const a=last.map.get(r.min)?.s||0;err+=Math.abs(r.sales-a);act+=a;pred+=r.sales});
+  last.map.forEach((o,m)=>{if(!fc.some(r=>r.min===m)){err+=o.s;act+=o.s}});
+  if(act<=0)return null;
+  return {key:last.key,wd:last.wd,actual:act,pred,dayErr:Math.abs(pred-act)/act,slotErr:err/act};
+}
+function backtest(day){
+  if(day!=='all')return backtestDay(day);
+  const wds=[...new Set(DATA.rows.map(r=>r[1]).filter(v=>v!=null))];
+  const bt=wds.map(w=>backtestDay(String(w))).filter(Boolean);
+  if(!bt.length)return null;
+  return {multi:bt.length,dayErr:bt.reduce((s,b)=>s+b.dayErr,0)/bt.length,slotErr:bt.reduce((s,b)=>s+b.slotErr,0)/bt.length};
+}
+
+/* ===== analysis ===== */
+function daypartOf(m){return m<630?'Breakfast':m<840?'Lunch':m<990?'Afternoon':'Dinner'}
+const DAYPARTS=[['Breakfast',0,630],['Lunch',630,840],['Afternoon',840,990],['Dinner',990,1440]];
+const BOH_CAP={Primary:3,Secondary:2,Breading:2,Machines:2,Fries:2,Prep:2,Biscuits:2,'Hash/Egg':1};
+function analyze(fc){
+  let a=fc.findIndex(r=>r.sales>0),b=fc.length-1;while(b>=0&&!(fc[b].sales>0))b--;
+  if(a<0)return null;
+  const L=fc.slice(a,b+1).map(r=>({...r}));
+  const diffs={};for(let i=1;i<L.length;i++){const d=L[i].min-L[i-1].min;diffs[d]=(diffs[d]||0)+1}
+  const step=+(Object.entries(diffs).sort((x,y)=>y[1]-x[1])[0]||[15])[0]||15;
+  const total=L.reduce((s,r)=>s+r.sales,0),mean=total/L.length,thr=mean*S.sens;
+  /* one peak per daypart: find the daypart's own high point, then grow the rush window
+     out to every 15 that runs within S.win% of that peak (a single soft 15 doesn't break it). */
+  const frac=(+S.win||70)/100,peaks=[];
+  DAYPARTS.forEach(([name,a,b])=>{
+    const idx=[];L.forEach((r,i)=>{if(r.min>=a&&r.min<b)idx.push(i)});
+    if(idx.length<2){if(idx.length)peaks.push({dp:name,none:true,from:a,to:b,why:'Too short to read'});return}
+    const lo=idx[0],hi=idx[idx.length-1];
+    // a daypart's top 15 sitting on its edge while sales keep climbing next door is just the ramp into the next rush
+    const cands=idx.filter(i=>L[i].sales>0&&!(i===hi&&L[i+1]&&L[i+1].sales>L[i].sales)&&!(i===lo&&L[i-1]&&L[i-1].sales>L[i].sales)
+      &&(!L[i-1]||i===lo||L[i].sales>=L[i-1].sales)&&(!L[i+1]||i===hi||L[i].sales>=L[i+1].sales));
+    let top=lo;idx.forEach(i=>{if(L[i].sales>L[top].sales)top=i});
+    if(!cands.length){peaks.push({dp:name,none:true,from:L[lo].min,to:L[hi].min+step,peakMin:L[top].min,peakSales:L[top].sales,why:L[hi+1]&&L[hi+1].sales>L[hi].sales?`Sales just climb into ${DAYPARTS[DAYPARTS.findIndex(d=>d[0]===name)+1]?.[0].toLowerCase()||'the next daypart'}`:'Sales just taper off from the last rush'});return}
+    let pk=cands[0];cands.forEach(i=>{if(L[i].sales>L[pk].sales)pk=i});
+    const lim=L[pk].sales*frac,ok=i=>i>=lo&&i<=hi&&L[i].sales>=lim;
+    let i0=pk,i1=pk;
+    for(;;){if(ok(i0-1))i0--;else if(ok(i0-2))i0-=2;else break}
+    for(;;){if(ok(i1+1))i1++;else if(ok(i1+2))i1+=2;else break}
+    if(i0===i1){const l=i0-1>=lo?L[i0-1].sales:-1,r=i1+1<=hi?L[i1+1].sales:-1;if(r>=l&&r>=0)i1++;else if(l>=0)i0--}
+    let tot=0;for(let i=i0;i<=i1;i++)tot+=L[i].sales;
+    const ratio=L[pk].sales/mean,level=ratio>=S.sens?'big':ratio>=1.1?'medium':'light';
+    peaks.push({dp:name,i0,i1,pk,start:L[i0].min,end:L[i1].min+step,peakMin:L[pk].min,peakSales:L[pk].sales,total:tot,level,ratio,
+      name:level==='light'?`${name} bump`:`${name} rush`});
+  });
+  const rushes=peaks.filter(p=>!p.none);
+  const lvl=L.map((_,i)=>{const r=rushes.find(r=>i>=r.i0&&i<=r.i1);return r?r.level:null});
+  const inRush=lvl.map(v=>v==='big'||v==='medium');
+  const bohCap=Object.values(BOH_CAP).reduce((s,v)=>s+v,0)-2;
+  L.forEach((r,i)=>{const p=L[i-1]?L[i-1].sales:r.sales,n=L[i+1]?L[i+1].sales:r.sales;
+    r.level=lvl[i];
+    const rate=(p+2*r.sales+n)/4*60/step,splh=lvl[i]==='big'?S.rushSplh:lvl[i]==='medium'?(S.splh+S.rushSplh)/2:S.splh;
+    const tot=Math.max(S.minFoh+S.minBoh,Math.ceil(rate/splh));
+    const boh=Math.min(bohCap,Math.max(S.minBoh,Math.round(tot*S.boh/100))),foh=Math.max(S.minFoh,tot-boh);
+    r.foh=foh;r.boh=boh;r.crew=foh+boh;r.rush=!!lvl[i]});
+  rushes.forEach(r=>{let mx=r.i0;for(let i=r.i0;i<=r.i1;i++)if(L[i].crew>L[mx].crew)mx=i;r.peakFoh=L[mx].foh;r.peakBoh=L[mx].boh});
+  const blocked=m=>rushes.some(r=>r.level!=='light'&&m>=r.start-45&&m<r.end+15);
+  const okB=L.map(r=>!blocked(r.min)&&r.sales<=mean*0.95&&r.min>=L[0].min+60&&r.min<L[L.length-1].min-30);
+  const raw=[];let cur=null;L.forEach((r,i)=>{if(okB[i]){if(cur&&cur.i1===i-1)cur.i1=i;else{cur={i0:i,i1:i};raw.push(cur)}}});
+  const breaks=raw.filter(x=>x.i1-x.i0>=1).map(x=>{let s=0,c=0;for(let i=x.i0;i<=x.i1;i++){s+=L[i].sales;c+=L[i].crew}const n=x.i1-x.i0+1;
+    return {start:L[x.i0].min,end:L[x.i1].min+step,avg:s/n,send:Math.max(1,Math.round(c/n*0.2)),dp:daypartOf(L[x.i0].min)}});
+  const bestBreak=[...breaks].sort((x,y)=>(y.end-y.start)/y.avg-(x.end-x.start)/x.avg)[0]||null;
+  const H={};L.forEach(r=>{const h=Math.floor(r.min/60);const o=H[h]||(H[h]={h,sales:0,low:0,high:0,foh:0,boh:0,rush:false,trans:0,hasT:false});
+    o.sales+=r.sales;o.low+=r.low;o.high+=r.high;o.foh=Math.max(o.foh,r.foh);o.boh=Math.max(o.boh,r.boh);o.rush=o.rush||r.rush;if(r.trans!=null){o.trans+=r.trans;o.hasT=true}});
+  const hourly=Object.values(H).sort((x,y)=>x.h-y.h);
+  hourly.forEach((o,i)=>{const p=hourly[i-1];o.dF=p?o.foh-p.foh:0;o.dB=p?o.boh-p.boh:0});
+  const laborHrs=L.reduce((s,r)=>s+r.crew*step/60,0);
+  const dps={};L.forEach(r=>{const d=daypartOf(r.min);const o=dps[d]||(dps[d]={name:d,sales:0,foh:0,boh:0,hrs:0,from:r.min,to:r.min});
+    o.sales+=r.sales;o.foh=Math.max(o.foh,r.foh);o.boh=Math.max(o.boh,r.boh);o.hrs+=r.crew*step/60;o.to=r.min+step});
+  Object.values(dps).forEach(d=>d.peak=peaks.find(p=>p.dp===d.name)||null);
+  return {L,step,total,mean,thr,rushes,peaks,breaks,bestBreak,hourly,laborHrs,
+    dayparts:['Breakfast','Lunch','Afternoon','Dinner'].map(k=>dps[k]).filter(Boolean),
+    open:L[0].min,close:L[L.length-1].min+step,peakFoh:Math.max(...L.map(r=>r.foh)),peakBoh:Math.max(...L.map(r=>r.boh)),
+    hasTrans:L.some(r=>r.trans!=null),low:L.reduce((s,r)=>s+r.low,0),high:L.reduce((s,r)=>s+r.high,0)};
+}
+
+/* ===== lineup ===== */
+const BOH_ORDER_AM=['Primary','Breading','Biscuits','Hash/Egg','Secondary','Machines','Primary','Biscuits','Prep','Breading','Secondary','Primary','Machines','Prep'];
+const BOH_ORDER=['Primary','Breading','Fries','Machines','Secondary','Primary','Prep','Breading','Secondary','Fries','Primary','Machines','Prep'];
+const FOH_CAP={'DT Bagger':2,'Face-to-Face (DT)':3,'Front Counter':2,'Drinks':2,'DT Payment':1,'Runner':3,'Expo':1,'Dining Room':1};
+const FOH_ORDER=['DT Bagger','Face-to-Face (DT)','Front Counter','Drinks','DT Payment','Runner','Face-to-Face (DT)','Expo','Dining Room','DT Bagger','Drinks','Runner','Front Counter','Face-to-Face (DT)','Runner'];
+function deployOrdered(n,order,cap){
+  const c={};order.forEach(k=>{if(!(k in c))c[k]=0});let left=n;
+  for(const k of order){if(left<=0)break;if(c[k]<cap[k]){c[k]++;left--}}
+  let guard=0;while(left>0&&guard++<10){let moved=false;for(const k of Object.keys(c)){if(left<=0)break;if(c[k]<cap[k]){c[k]++;left--;moved=true}}if(!moved)break}
+  return {counts:c,extra:left,cap};
+}
+function lineup(foh,boh,min){const am=min<630;return {boh:deployOrdered(boh,am?BOH_ORDER_AM:BOH_ORDER,BOH_CAP),foh:deployOrdered(foh,FOH_ORDER,FOH_CAP),am}}
+
+/* ===== helpers ===== */
+const $=id=>document.getElementById(id);
+function fmt(min){min=((Math.round(min)%1440)+1440)%1440;const h=Math.floor(min/60),m=min%60;return (h%12||12)+':'+String(m).padStart(2,'0')+' '+(h>=12?'PM':'AM')}
+function fmtShort(min){return fmt(min).replace(':00','').replace(' AM','a').replace(' PM','p')}
+function dur(m){m=Math.max(0,Math.round(m));const h=Math.floor(m/60),r=m%60;return h?(h+' hr'+(r?' '+r+' min':'')):r+' min'}
+const money=v=>'$'+Math.round(v).toLocaleString('en-US');
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p}
+function prettyDate(key){const m=key.match(/^(\d+)\/(\d+)\//);return m?`${MON[+m[1]-1]} ${+m[2]}`:key}
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2000)}
+function cu(v,kind){return `<span class="cu" data-v="${v}" data-k="${kind}">${fmtK(v,kind)}</span>`}
+function fmtK(v,k){return k==='money'?money(v):k==='dec1'?(+v).toFixed(1):k==='pct'?(+v).toFixed(1)+'%':k==='splh'?'$'+Math.round(v):Math.round(v)}
+function countUp(root){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  root.querySelectorAll('.cu').forEach((el,i)=>{const to=+el.dataset.v,k=el.dataset.k,t0=performance.now()+i*40,D=900;
+    const tick=now=>{const p=Math.min(1,Math.max(0,(now-t0)/D)),e=1-Math.pow(1-p,3);el.textContent=fmtK(to*e,k);if(p<1)requestAnimationFrame(tick)};requestAnimationFrame(tick)});
+}
+
+/* ===== charts ===== */
+function salesChart(an,now){
+  const {L,step}=an,W=1000,H=250,pl=58,pr=12,pt=16,pb=32,n=L.length,bw=(W-pl-pr)/n;
+  const mx=niceMax(Math.max(...L.map(r=>Math.max(r.sales,r.high))));
+  const x=m=>pl+((m-L[0].min)/step)*bw,y=v=>pt+(H-pt-pb)*(1-v/mx);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Forecast sales by 15 minutes">`;
+  an.breaks.forEach(b=>s+=`<rect x="${x(b.start)}" y="${pt}" width="${x(b.end)-x(b.start)}" height="${H-pt-pb}" fill="var(--oksoft)"/>`);
+  an.rushes.forEach(r=>{if(r.level==='light')return;const a=Math.max(pl,x(r.start-45));s+=`<rect x="${a}" y="${pt}" width="${Math.max(0,x(r.start-15)-a)}" height="${H-pt-pb}" fill="var(--warnsoft)"/>`;
+    s+=`<rect x="${x(r.end)}" y="${pt}" width="${Math.max(0,Math.min(W-pr,x(r.end+30))-x(r.end))}" height="${H-pt-pb}" fill="var(--warnsoft)"/>`});
+  for(let i=0;i<=4;i++){const v=mx*i/4;s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${money(v)}</text>`}
+  L.forEach((r,i)=>{if(r.high>r.low)s+=`<rect x="${pl+i*bw}" y="${y(r.high)}" width="${bw}" height="${y(r.low)-y(r.high)}" fill="var(--band)"/>`});
+  L.forEach((r,i)=>s+=`<rect class="gb" style="--i:${i}" x="${pl+i*bw+bw*0.18}" y="${y(r.sales)}" width="${Math.max(1,bw*0.64)}" height="${H-pb-y(r.sales)}" rx="2" fill="${r.level==='light'?'var(--warn)':r.level?'var(--red)':'var(--faint)'}"><title>${fmt(r.min)} · ${money(r.sales)} (range ${money(r.low)}–${money(r.high)})</title></rect>`);
+  an.rushes.forEach(r=>{const cx=x(r.peakMin)+bw/2,cy=y(r.peakSales)-8;
+    s+=`<path d="M${cx-6} ${cy-8}L${cx+6} ${cy-8}L${cx} ${cy}Z" fill="var(--fg)"/><text x="${cx}" y="${cy-12}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--fg)">${r.dp[0]} ${fmtShort(r.peakMin)}</text>`});
+  L.forEach(r=>{if(r.min%120===0)s+=`<text x="${x(r.min)}" y="${H-10}" text-anchor="middle" font-size="12" fill="var(--muted)">${fmt(r.min).replace(':00','')}</text>`});
+  if(now!=null&&now>=L[0].min&&now<=an.close)s+=`<line x1="${x(now)}" x2="${x(now)}" y1="${pt-4}" y2="${H-pb}" stroke="var(--fg)" stroke-width="2.5"/><text x="${x(now)+6}" y="${pt+8}" font-size="13" font-weight="700" fill="var(--fg)">NOW</text>`;
+  return s+'</svg>';
+}
+function crewChart(an){
+  const {L,step}=an,W=1000,H=220,pl=58,pr=12,pt=14,pb=32,n=L.length,bw=(W-pl-pr)/n;
+  const mx=Math.max(4,Math.ceil(Math.max(...L.map(r=>r.crew))/4)*4);
+  const x=m=>pl+((m-L[0].min)/step)*bw,y=v=>pt+(H-pt-pb)*(1-v/mx);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Crew needed by 15 minutes">`;
+  for(let i=0;i<=4;i++){const v=mx*i/4;s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${v}</text>`}
+  L.forEach((r,i)=>{const X=pl+i*bw+bw*0.12,w=Math.max(1,bw*0.76);
+    s+=`<g class="gb" style="--i:${i}"><rect x="${X}" y="${y(r.boh)}" width="${w}" height="${H-pb-y(r.boh)}" fill="var(--red)"><title>${fmt(r.min)} · BOH ${r.boh}</title></rect><rect x="${X}" y="${y(r.crew)}" width="${w}" height="${Math.max(0,y(r.boh)-y(r.crew)-1)}" fill="var(--foh)"><title>${fmt(r.min)} · FOH ${r.foh}</title></rect></g>`});
+  L.forEach(r=>{if(r.min%120===0)s+=`<text x="${x(r.min)}" y="${H-10}" text-anchor="middle" font-size="12" fill="var(--muted)">${fmt(r.min).replace(':00','')}</text>`});
+  return s+'</svg>';
+}
+function spark(an,max){
+  const {L}=an,W=140,H=34,n=L.length;
+  const pts=L.map((r,i)=>`${(i/(n-1)*W).toFixed(1)},${(H-2-(r.sales/max)*(H-4)).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline class="spark" style="--len:400" points="${pts}" fill="none" stroke="var(--red)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+}
+
+/* ===== scheduler ===== */
+const LVL={big:'Big rush',medium:'Rush',light:'Light bump'};
+function peakCards(an){
+  return `<section class="card rv" style="--d:3"><h2>Peaks by daypart <small>Every daypart gets its own peak, not just the biggest one of the day</small></h2><div class="peaks">
+  ${an.dayparts.map((d,i)=>{const p=d.peak;
+    if(!p||p.none)return `<div class="pk none" style="--d:${i}"><div class="pkh"><h3>${d.name}</h3><span class="lv">Ramp</span></div>
+      ${p&&p.peakMin!=null?`<span class="label">Busiest 15</span><span class="pt">${fmt(p.peakMin)}</span>`:''}<div class="win">${fmt(d.from)} – ${fmt(d.to)}</div><p class="note" style="margin:0 0 6px">${p?p.why:'No sales in this daypart'}, so there's no separate rush. Staff to the hourly counts.</p>
+      <div class="row"><span>Daypart sales</span><b>${money(d.sales)}</b></div><div class="row"><span>Labor hrs</span><b>${d.hrs.toFixed(1)}</b></div></div>`;
+    return `<div class="pk ${p.level}" style="--d:${i}">
+      <div class="pkh"><h3>${d.name}</h3><span class="lv">${LVL[p.level]}</span></div>
+      <span class="label">Peak 15</span><span class="pt">${fmt(p.peakMin)}</span>
+      <div class="win"><b>${fmt(p.start)} – ${fmt(p.end)}</b> · ${dur(p.end-p.start)}</div>
+      <div class="row"><span>Peak sales / 15</span><b>${money(p.peakSales)}</b></div>
+      <div class="row"><span>Crew at peak</span><b><span class="f">${p.peakFoh} FOH</span> · <span class="b">${p.peakBoh} BOH</span></b></div>
+      <div class="row"><span>On position by</span><b>${fmt(p.start-15)}</b></div>
+      <div class="row"><span>Daypart sales</span><b>${money(d.sales)}</b></div>
+      <div class="row"><span>Labor hrs</span><b>${d.hrs.toFixed(1)}</b></div></div>`}).join('')}
+  </div></section>`;
+}
+function basisLine(ds){
+  if(!ds.length)return '';
+  const name=DAY==='all'?'days':WD[+DAY]+'s';
+  const range=ds[0].dn!=null?` (${prettyDate(ds[0].key)} – ${prettyDate(ds[ds.length-1].key)})`:'';
+  return `Built from ${ds.length} ${ds.length===1?name.replace(/s$/,''):name}${range} · ${S.method==='smart'?'smart average':'straight average'} · planning for a ${S.plan} day${S.adj?` · ${S.adj>0?'+':''}${S.adj}% adjustment`:''}`;
+}
+function weekStrip(){
+  const wds=[...new Set(DATA.rows.map(r=>r[1]).filter(v=>v!=null))].sort((a,b)=>a-b);
+  if(wds.length<2)return '';
+  const res=wds.map(w=>{const ds=datesFor(String(w));const an=analyze(forecastFrom(ds));return an&&{w,an,n:ds.length}}).filter(Boolean);
+  const mx=Math.max(...res.map(r=>Math.max(...r.an.L.map(x=>x.sales))));
+  return `<section class="card rv" style="--d:3"><h2>Your week <small>Tap a day to plan it. Every day in your file feeds its weekday.</small></h2><div class="week">
+    ${res.map(({w,an,n})=>`<button class="wd" type="button" data-wd="${w}" aria-current="${String(w)===DAY}">
+      <span class="dn">${WD[w].slice(0,3)}<span>${n} day${n>1?'s':''}</span></span>
+      <span class="ws">${money(an.total)}</span>
+      <span class="wc"><span class="f">${an.peakFoh}</span> FOH · <span class="b">${an.peakBoh}</span> BOH peak</span>
+      ${spark(an,mx)}
+      <span class="wc">${an.laborHrs.toFixed(0)} labor hrs · $${Math.round(an.total/an.laborHrs)} SPLH</span>
+      <span class="wpk">${an.peaks.filter(p=>!p.none).map(p=>`<span class="${p.level}">${p.dp[0]} ${fmtShort(p.peakMin)}</span>`).join('')}</span>
+    </button>`).join('')}</div></section>`;
+}
+function renderSched(an,ds){
+  const splh=an.total/an.laborHrs,lab=an.laborHrs*S.wage/an.total*100;
+  const bt=backtest(DAY);
+  const label=DAY==='all'?(DATA.rows.some(r=>r[1]!=null)?'All-days':'Daily'):WD[+DAY];
+  const accBox=bt?`<div class="acc"><span class="label">${bt.multi?`Accuracy check · ${bt.multi} weekdays`:`Accuracy check · ${prettyDate(bt.key)}`}</span>
+      <span class="v ${bt.dayErr<=.06?'good':bt.dayErr<=.12?'meh':'bad'}">${(100-bt.dayErr*100).toFixed(0)}% on the day</span>
+      <div class="meter"><i style="width:${Math.max(4,100-bt.dayErr*100)}%"></i></div>
+      <span class="note">${bt.multi?'Each weekday\'s latest day, forecast from the ones before it.':`Forecast ${money(bt.pred)} from earlier ${WD[bt.wd]}s, actual came in at ${money(bt.actual)}.`} 15-min slots ran within ${(bt.slotErr*100).toFixed(0)}%.</span></div>`
+    :`<div class="acc"><span class="label">Accuracy check</span><span class="note">Load 3 or more of the same weekday and the tool tests itself against the latest one.</span></div>`;
+  const moveTxt=o=>{const p=[];if(o.dF)p.push(`<span class="move ${o.dF>0?'add':'cut'}">${o.dF>0?'+':'−'}${Math.abs(o.dF)} FOH</span>`);if(o.dB)p.push(`<span class="move ${o.dB>0?'add':'cut'}">${o.dB>0?'+':'−'}${Math.abs(o.dB)} BOH</span>`);return p.join(' ')||'<span class="note">hold</span>'};
+  return `
+  <section class="hero rv" style="--d:0">
+    <div style="min-width:0"><h2><em>${label}</em> forecast</h2><p>${basisLine(ds)}</p></div>
+    ${accBox}
+  </section>
+  <section class="kpis">
+    <div class="kpi rv" style="--d:1"><span class="label">Forecast sales</span><span class="v">${cu(an.total,'money')}</span><span class="s">Normal range ${money(an.low)}–${money(an.high)}</span></div>
+    <div class="kpi rv" style="--d:1.5"><span class="label">Peak crew</span><span class="v"><span class="f">${cu(an.peakFoh,'int')}</span> / <span class="b">${cu(an.peakBoh,'int')}</span></span><span class="s">FOH / BOH at the busiest 15</span></div>
+    <div class="kpi rv" style="--d:2"><span class="label">Labor hours</span><span class="v">${cu(an.laborHrs,'dec1')}</span><span class="s">${fmt(an.open)} – ${fmt(an.close)}</span></div>
+    <div class="kpi rv" style="--d:2.5"><span class="label">Projected SPLH</span><span class="v ${splh>=75?'good':splh>=70?'meh':'bad'}">${cu(splh,'splh')}</span><span class="s">Goal $75 · building $70</span></div>
+    <div class="kpi rv" style="--d:3"><span class="label">Est. labor %</span><span class="v ${lab<=19?'good':lab<=21?'meh':'bad'}">${cu(lab,'pct')}</span><span class="s">Target 19% at $${(+S.wage).toFixed(2)}/hr</span></div>
+  </section>
+  ${peakCards(an)}
+  ${weekStrip()}
+  <section class="card rv" style="--d:4"><h2>Sales by 15 minutes <small>Shaded band = normal range across your days. Every daypart's peak is marked.</small></h2>
+    <div class="chart">${salesChart(an,null)}</div>
+    <div class="legend"><span><i style="background:var(--red)"></i>Rush window</span><span><i style="background:var(--warn)"></i>Light bump</span><span><i style="background:var(--faint)"></i>Normal</span><span>▼ Peak 15 per daypart</span><span><i style="background:var(--band);outline:1px solid var(--faint)"></i>Normal range</span><span><i style="background:var(--warnsoft);outline:1px solid var(--warn)"></i>Stock-up / reset</span><span><i style="background:var(--oksoft);outline:1px solid var(--ok)"></i>Break window</span></div>
+  </section>
+  ${shiftCard(an)}
+  <section class="card rv" style="--d:5"><h2>Crew needed <small>Headcount on the clock for each 15 minutes</small></h2>
+    <div class="chart">${crewChart(an)}</div>
+    <div class="legend"><span><i style="background:var(--foh)"></i>FOH</span><span><i style="background:var(--red)"></i>BOH</span></div>
+  </section>
+
+  <section class="card rv" style="--d:7"><h2>Hour by hour <small>Build the schedule to these counts. Moves show who comes in or gets cut at the top of the hour.</small></h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Hour</th><th>Sales</th><th>Range</th>${an.hasTrans?'<th>Trans</th>':''}<th>FOH</th><th>BOH</th><th>Total</th><th>Moves</th></tr></thead>
+      <tbody>${an.hourly.map(o=>`<tr class="${o.rush?'rush':''}"><td>${fmt(o.h*60)}${o.rush?' <span class="note">· rush</span>':''}</td><td>${money(o.sales)}</td><td class="rng">${money(o.low)}–${money(o.high)}</td>${an.hasTrans?`<td>${o.hasT?Math.round(o.trans):'–'}</td>`:''}<td><span class="f">${o.foh}</span></td><td><span class="b">${o.boh}</span></td><td>${o.foh+o.boh}</td><td>${moveTxt(o)}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>`;
+}
+
+/* ===== shift builder: stack the crew curve into real shifts ===== */
+function shiftsFor(an,side){
+  /* sweep the day: start a shift the moment the curve needs one, cut the longest-worked person once
+     they've hit the shortest-shift length and the need stays down, cap everyone at the longest shift. */
+  const {L,step}=an,open=an.open-S.preOpen,close=an.close+S.postClose,minL=S.minShift*60,maxL=S.maxShift*60,bridge=S.bridge||0;
+  const need=L.map(r=>r[side]),done=[];let act=[];
+  L.forEach((r,i)=>{
+    const t=i===0?open:r.min;
+    // anyone at the cap goes home
+    act=act.filter(sh=>{if(t-sh.start>=maxL){sh.end=sh.start+maxL;done.push(sh);return false}return true});
+    // how many we need now, or soon if the curve comes right back up
+    let hold=need[i];for(let j=i;j<L.length&&L[j].min<r.min+bridge;j++)hold=Math.max(hold,need[j]);
+    if(act.length>hold){
+      act.sort((x,y)=>x.start-y.start);
+      let extra=act.length-hold;
+      act=act.filter(sh=>{if(extra>0&&t-sh.start>=minL){sh.end=t;done.push(sh);extra--;return false}return true});
+    }
+    while(act.length<need[i])act.push({start:t});
+  });
+  act.forEach(sh=>{sh.end=close;done.push(sh)});
+  // a shift that ends up short at close gets pulled earlier so it still meets the minimum
+  done.forEach(sh=>{if(sh.end-sh.start<minL)sh.start=Math.max(open,sh.end-minL);if(sh.end-sh.start<minL)sh.end=Math.min(close,sh.start+minL)});
+  done.forEach(sh=>{sh.hrs=(sh.end-sh.start)/60;
+    sh.tag=sh.start<=an.open?'Open':sh.end>=an.close?'Close':sh.start<10*60?'AM':sh.start<12*60&&sh.end<=15*60+30?'Lunch':sh.start<14*60?'Mid':'Dinner'});
+  return done.sort((x,y)=>x.start-y.start||y.end-x.end);
+}
+function shiftCard(an){
+  const F=shiftsFor(an,'foh'),B=shiftsFor(an,'boh');
+  const span=[an.open-S.preOpen,an.close+S.postClose],W=span[1]-span[0],pc=m=>(m-span[0])/W*100;
+  const hrs=a=>a.reduce((s,x)=>s+x.hrs,0);const tot=hrs(F)+hrs(B);
+  const splh=an.total/tot,lab=tot*S.wage/an.total*100;
+  const ticks=[];for(let m=Math.ceil(span[0]/120)*120;m<=span[1];m+=120)ticks.push(m);
+  const col=(arr,side,cls)=>`<div class="gcol"><h3 class="${cls}">${side} · ${arr.length} shifts · ${hrs(arr).toFixed(1)} hrs</h3>
+    <div class="gaxis">${ticks.map(m=>`<span style="left:${pc(m)}%">${fmtShort(m)}</span>`).join('')}</div>
+    ${arr.map((sh,i)=>`<div class="gr"><span class="gtag t-${sh.tag.toLowerCase()}">${sh.tag}</span><div class="gt">${ticks.map(m=>`<b style="left:${pc(m)}%"></b>`).join('')}<i class="${cls}" style="left:${pc(sh.start)}%;width:${pc(sh.end)-pc(sh.start)}%;--d:${i}"></i></div><span class="gh num">${fmtShort(sh.start)}–${fmtShort(sh.end)} · ${sh.hrs%1?sh.hrs.toFixed(1):sh.hrs}h</span></div>`).join('')}</div>`;
+  SHIFTS={F,B,an};
+  return `<section class="card rv" style="--d:5.5"><h2>Shift builder <small>The crew curve turned into real shifts. ${S.minShift}–${S.maxShift} hr shifts, openers in ${S.preOpen} min early, closers stay ${S.postClose} min.</small></h2>
+    <div class="kpis" style="margin-bottom:16px">
+      <div class="kpi"><span class="label">Shifts to fill</span><span class="v"><span class="f">${F.length}</span> / <span class="b">${B.length}</span></span><span class="s">FOH / BOH</span></div>
+      <div class="kpi"><span class="label">Scheduled hours</span><span class="v">${tot.toFixed(1)}</span><span class="s">${(tot-an.laborHrs)>=0?'+':''}${(tot-an.laborHrs).toFixed(1)} over the exact curve. Short peaks + ${S.minShift} hr minimums cost hours.</span></div>
+      <div class="kpi"><span class="label">Scheduled SPLH</span><span class="v ${splh>=75?'good':splh>=70?'meh':'bad'}">$${Math.round(splh)}</span><span class="s">What this schedule actually runs</span></div>
+      <div class="kpi"><span class="label">Scheduled labor %</span><span class="v ${lab<=19?'good':lab<=21?'meh':'bad'}">${lab.toFixed(1)}%</span><span class="s">Target 19%</span></div>
+    </div>
+    <div class="gantt">${col(F,'FOH','f')}${col(B,'BOH','b')}</div>
+    <div class="controls" style="margin-top:14px"><button class="btn" id="copySched" type="button">Copy shift list</button><span class="note">Paste it into Nation or the group chat, then put names on it.</span></div>
+  </section>`;
+}
+let SHIFTS=null;
+function shiftText(){
+  const {F,B,an}=SHIFTS;const day=DAY==='all'?'Average day':WD[+DAY];
+  const line=sh=>`${sh.tag.padEnd(6)} ${fmt(sh.start)} – ${fmt(sh.end)} (${sh.hrs}h)  ____________`;
+  return [`HUEYTOWN SHIFT PLAN · ${day}`,`Forecast ${money(an.total)} · ${an.peaks.filter(p=>!p.none).map(p=>`${p.dp} peak ${fmt(p.peakMin)}`).join(' · ')}`,'',
+    `FOH (${F.length})`,...F.map(line),'',`BOH (${B.length})`,...B.map(line)].join('\n');
+}
+
+/* ===== on the floor ===== */
+const STOCK={
+  am:{boh:['Biscuits baked ahead to the rush number','Filets and nuggets pulled and breaded for breakfast','Hash browns and eggs stocked at the board','Boards stocked: buns, biscuits, cheese, wrappers, boxes'],
+      foh:['Coffee brewed, iced coffee stocked','Cups, lids, bags, ice full']},
+  pm:{boh:['Breading table stocked: breader, milk wash, pans','Filets, nuggets, strips pulled and thawed for the rush','Fry oil filtered, vats at temp','Boards stocked: buns, pickles, cheese, wrappers, boxes'],
+      foh:['Sauces, napkins, straws, cutlery stocked','Cups, lids, bags, ice full, lemonade and tea made']}
+};
+const RESET=['Clean and sanitize boards and the breading table','Restock everything that ran low','Check holding times; waste what is expired and log it','FOH restock: drinks, sauces, bags, napkins'];
+function buildPlan(an){
+  const ev=[];
+  an.rushes.forEach(r=>{const k=r.peakMin<630?'am':'pm';
+    if(r.level==='light'){ev.push({t:r.start,k:'add',w:`${r.name}: peak at ${fmt(r.peakMin)}`,d:`Small push ${fmt(r.start)}–${fmt(r.end)} (~${money(r.peakSales)} per 15 at the top). Keep breaks moving, just hold the line at ${r.peakFoh} FOH / ${r.peakBoh} BOH.`});return}
+    ev.push({t:Math.max(an.open,r.start-45),k:'stock',w:`Stock up for the ${r.name.toLowerCase()}`,d:'Everything full before the line gets long.',list:[...STOCK[k].boh,...STOCK[k].foh]});
+    ev.push({t:Math.max(an.open,r.start-15),k:'ready',w:`Lineup locked: ${r.peakFoh} FOH / ${r.peakBoh} BOH`,d:'All breaks back. Everyone on position. No new breaks until the rush is over.'});
+    ev.push({t:r.start,k:'rush',w:`${r.name} starts`,d:`${LVL[r.level]}. Runs about ${dur(r.end-r.start)} to ${fmt(r.end)}. Peak at ${fmt(r.peakMin)} (~${money(r.peakSales)} per 15 min). About ${money(r.total)} through the rush.`});
+    ev.push({t:r.end,k:'reset',w:`Reset after the ${r.name.toLowerCase()}`,d:'30 minutes to clean and restock.',list:RESET})});
+  an.breaks.forEach(b=>ev.push({t:b.start,k:'break',w:`Break window ${fmt(b.start)} – ${fmt(b.end)}`,d:`Send ${b.send} at a time. Longest breaks first.${an.bestBreak===b?' Best window of the day.':''}`}));
+  an.hourly.forEach(o=>{const near=an.rushes.some(r=>o.h*60>r.start-60&&o.h*60<r.end);
+    if((o.dF<0||o.dB<0)&&!near)ev.push({t:o.h*60,k:'cut',w:`Crew drops to ${o.foh} FOH / ${o.boh} BOH`,d:`Cut or send on break: ${[o.dF<0?(-o.dF)+' FOH':'',o.dB<0?(-o.dB)+' BOH':''].filter(Boolean).join(', ')}.`});
+    else if((o.dF>0||o.dB>0)&&!near)ev.push({t:o.h*60,k:'add',w:`Crew goes up to ${o.foh} FOH / ${o.boh} BOH`,d:`Bring in ${[o.dF>0?o.dF+' FOH':'',o.dB>0?o.dB+' BOH':''].filter(Boolean).join(', ')}.`})});
+  const ord='stock ready rush reset break cut add';
+  return ev.sort((a,b)=>a.t-b.t||ord.indexOf(a.k)-ord.indexOf(b.k));
+}
+function floorState(an,now){
+  const {L,step}=an;const ci=L.findIndex(r=>now>=r.min&&now<r.min+step);
+  const cur=an.rushes.find(r=>now>=r.start&&now<r.end),next=an.rushes.find(r=>r.start>now),target=cur||next;
+  const nextPeak=an.rushes.find(r=>r.peakMin>=now);
+  const nowRow=ci>=0?L[ci]:(now<an.open?L[0]:L[L.length-1]);
+  const brNow=an.breaks.find(b=>now>=b.start&&now<b.end),brNext=an.breaks.find(b=>b.start>now);
+  let cls,tag,head,sub;
+  if(now<an.open){cls='steady';tag='Before open';head=`Doors at ${fmt(an.open)}`;sub=next?`First rush: ${next.name.toLowerCase()} at ${fmt(next.start)}, about ${dur(next.end-next.start)}.`:'No rush forecast today.'}
+  else if(now>=an.close){cls='closed';tag='Closed';head='Day is done';sub='Turn off the live clock and pick a time to walk the day.'}
+  else if(cur&&cur.level==='light'){cls='coming';tag='Light bump';head=`${cur.name}: peak at ${fmt(cur.peakMin)}`;sub=`Small push until ${fmt(cur.end)}. Hold ${cur.peakFoh} FOH / ${cur.peakBoh} BOH on the line and keep breaks moving.`}
+  else if(cur){cls='inrush';tag='In the rush';head=`${cur.name}: ${dur(cur.end-now)} left`;sub=`Peak at ${fmt(cur.peakMin)}. Hold positions. No breaks until ${fmt(cur.end)}, then reset.`}
+  else if(next&&next.level!=='light'&&next.start-now<=45){cls='coming';tag='Rush coming';head=`${next.name} in ${dur(next.start-now)}`;sub=`Starts ${fmt(next.start)} and runs about ${dur(next.end-next.start)} to ${fmt(next.end)}. Finish stock-up and pull breaks back now.`}
+  else if(next){cls='steady';tag='Steady';head=`Next: ${next.name.toLowerCase()} at ${fmt(next.start)}`;sub=`${dur(next.start-now)} away. Runs about ${dur(next.end-next.start)}. ${brNow?'Good time for breaks.':'Use the quiet time to stock and clean.'}`}
+  else{cls='steady';tag='Winding down';head='No more rushes today';sub='Run the closing plan. Cut to minimums as the counts drop.'}
+  return {ci,cur,next,target,nextPeak,nowRow,brNow,brNext,cls,tag,head,sub};
+}
+function stationsHTML(d,cls,color){
+  return Object.entries(d.counts).map(([k,v],i)=>`<div class="st ${v?'':'zero'}"><span>${k}</span><span class="n ${cls}">${v}</span><span class="cap"><i style="--d:${i};width:${v/d.cap[k]*100}%;background:${color}"></i></span></div>`).join('')
+    +(d.extra>0?`<div class="note">+${d.extra} more than the stations hold. Use them as runners or on prep.</div>`:'');
+}
+function rail(an,now){
+  const span=an.close-an.open,p=m=>Math.min(100,Math.max(0,(m-an.open)/span*100));
+  let s=`<div class="railhint"><span>Tap or drag the bar to check any time</span><span class="lgd"><i class="r"></i>Rush <i class="s"></i>Stock/reset <i class="k"></i>Breaks</span></div><div class="rail" id="rail" role="slider" tabindex="0" aria-label="Day timeline. Use arrow keys to check a time." aria-valuemin="${an.open}" aria-valuemax="${an.close}" aria-valuenow="${SCRUB??now}" aria-valuetext="${fmt(SCRUB??now)}">`;
+  an.breaks.forEach(b=>s+=`<span class="seg2 k" style="left:${p(b.start)}%;width:${p(b.end)-p(b.start)}%"></span>`);
+  an.rushes.forEach(r=>{if(r.level==='light'){s+=`<span class="seg2 s" style="left:${p(r.start)}%;width:${p(r.end)-p(r.start)}%"></span>`;return}s+=`<span class="seg2 s" style="left:${p(r.start-45)}%;width:${p(r.start)-p(r.start-45)}%"></span><span class="seg2 ${r.level==='light'?'s':'r'}" style="left:${p(r.start)}%;width:${p(r.end)-p(r.start)}%"></span><span class="seg2 s" style="left:${p(r.end)}%;width:${p(r.end+30)-p(r.end)}%"></span>`});
+  s+=`<span class="done" style="width:${p(now)}%"></span>`;
+  if(now>=an.open&&now<=an.close)s+=`<span class="nowm" style="left:calc(${p(now)}% - 1px)"></span>`;
+  s+=`<span class="pm" id="pm" style="left:calc(${p(SCRUB??an.open)}% - 2px)" ${SCRUB==null?'hidden':''}><b>${SCRUB==null?'':fmtShort(SCRUB)}</b></span>`;
+  s+='</div><div class="railx">';
+  for(let m=Math.ceil(an.open/120)*120;m<=an.close;m+=120)s+=`<span>${fmtShort(m)}</span>`;
+  return s+`</div><div class="probe" id="probe" aria-live="polite" ${SCRUB==null?'hidden':''}>${SCRUB==null?'':probeHTML(an,SCRUB)}</div>`;
+}
+/* ---- tap-to-examine: pinpoint any 15 on the day rail ---- */
+let SCRUB=null;
+function probeHTML(an,m){
+  const row=an.L.find(r=>m>=r.min&&m<r.min+an.step)||an.L[an.L.length-1];
+  const r=an.rushes.find(x=>m>=x.start&&m<x.end);
+  const stk=an.rushes.find(x=>x.level!=='light'&&m>=x.start-45&&m<x.start);
+  const rst=an.rushes.find(x=>x.level!=='light'&&m>=x.end&&m<x.end+30);
+  const br=an.breaks.find(b=>m>=b.start&&m<b.end);
+  const nx=an.rushes.find(x=>x.start>m);
+  let cls,tag,desc;
+  if(r){cls=r.level==='light'?'meh':'bad';tag=`${r.name} · ${LVL[r.level]}`;desc=`Runs ${fmt(r.start)} – ${fmt(r.end)}. ${m===r.peakMin?'<b>This is the peak 15.</b>':`Peak at ${fmt(r.peakMin)}.`} Hold ${r.peakFoh} FOH / ${r.peakBoh} BOH. ${r.level==='light'?'Keep breaks moving.':'No breaks.'}`}
+  else if(stk){cls='meh';tag='Stock-up';desc=`${stk.name} starts in ${dur(stk.start-m)} at ${fmt(stk.start)}. Finish stock, pull breaks back, everyone on position by ${fmt(stk.start-15)}.`}
+  else if(rst){cls='meh';tag='Reset';desc=`Clean and restock after the ${rst.name.toLowerCase()} until ${fmt(rst.end+30)}.`}
+  else if(br){cls='good';tag='Break window';desc=`Send ${br.send} at a time until ${fmt(br.end)}.${an.bestBreak===br?' Best window of the day.':''}`}
+  else{cls='';tag='Steady';desc=nx?`Next: ${nx.name.toLowerCase()} at ${fmt(nx.start)}, ${dur(nx.start-m)} out. Stock and clean.`:'No more rushes after this. Cut to minimums as counts drop.'}
+  const rel=m===NOW?'right now':m>NOW?`${dur(m-NOW)} from now`:`${dur(NOW-m)} ago`;
+  return `<div class="ph"><span class="pt2">${fmt(m)}</span><span class="zp ${cls}">${tag}</span><span class="note">${rel}</span></div>
+    <p class="zd">${desc}</p>
+    <div class="pgrid"><div><span class="label">Sales / 15</span><b>${money(row.sales)}</b></div><div><span class="label">FOH</span><b class="f">${row.foh}</b></div><div><span class="label">BOH</span><b class="b">${row.boh}</b></div><div><span class="label">Total</span><b>${row.crew}</b></div></div>
+    <div class="pbtns"><button class="btn" type="button" data-act="prev" aria-label="15 minutes earlier">‹ 15</button><button class="btn" type="button" data-act="next" aria-label="15 minutes later">15 ›</button><button class="btn primary" type="button" data-act="go">Walk the day from ${fmt(m)}</button><button class="btn" type="button" data-act="close" aria-label="Close">✕</button></div>`;
+}
+function setProbe(an,m){
+  if(m==null){SCRUB=null;const pr=$('probe'),pm=$('pm');if(pr)pr.hidden=true;if(pm)pm.hidden=true;return}
+  m=Math.min(an.close-an.step,Math.max(an.open,Math.round(m/an.step)*an.step));
+  const changed=m!==SCRUB;SCRUB=m;
+  const span=an.close-an.open,pct=(m-an.open)/span*100;
+  const pm=$('pm'),pr=$('probe'),el=$('rail');
+  if(pm){pm.hidden=false;pm.style.left=`calc(${pct}% - 2px)`;pm.firstElementChild.textContent=fmtShort(m)}
+  if(pr){pr.hidden=false;pr.innerHTML=probeHTML(an,m)}
+  if(el){el.setAttribute('aria-valuenow',m);el.setAttribute('aria-valuetext',fmt(m))}
+  if(changed)try{navigator.vibrate&&navigator.vibrate(4)}catch(e){}
+}
+function wireRail(an){
+  const el=$('rail');if(!el)return;
+  const span=an.close-an.open;
+  const toMin=x=>{const b=el.getBoundingClientRect();const f=Math.min(1,Math.max(0,(x-b.left)/b.width));return an.open+f*span};
+  let drag=false;
+  el.onpointerdown=e=>{drag=true;try{el.setPointerCapture(e.pointerId)}catch(_){}setProbe(an,toMin(e.clientX))};
+  el.onpointermove=e=>{if(drag)setProbe(an,toMin(e.clientX))};
+  el.onpointerup=el.onpointercancel=()=>{drag=false};
+  el.onkeydown=e=>{const cur=SCRUB??NOW;
+    if(e.key==='ArrowRight'||e.key==='ArrowUp'){setProbe(an,cur+an.step);e.preventDefault()}
+    else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){setProbe(an,cur-an.step);e.preventDefault()}
+    else if(e.key==='Home'){setProbe(an,an.open);e.preventDefault()}
+    else if(e.key==='End'){setProbe(an,an.close);e.preventDefault()}
+    else if(e.key==='Escape')setProbe(an,null)};
+  const pr=$('probe');
+  if(pr)pr.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+    if(a==='prev')setProbe(an,SCRUB-an.step);
+    else if(a==='next')setProbe(an,SCRUB+an.step);
+    else if(a==='close'){setProbe(an,null);el.focus()}
+    else if(a==='go'){LIVE=false;NOW=SCRUB;SCRUB=null;render(false);const s=document.querySelector('.status');s&&s.scrollIntoView({behavior:'smooth',block:'start'})}};
+  document.querySelectorAll('.pk[data-peak]').forEach(c=>{const go=()=>{setProbe(an,+c.dataset.peak);el.scrollIntoView({behavior:'smooth',block:'center'})};
+    c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+}
+function renderFloor(an){
+  const now=NOW,st=floorState(an,now),t=st.target;
+  const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
+  const ev=buildPlan(an).filter(e=>e.t>=now-an.step);
+  const nextIdx=ev.findIndex(e=>e.t>now);
+  const opts=an.L.map(r=>`<option value="${r.min}" ${st.ci>=0&&r.min===an.L[st.ci].min?'selected':''}>${fmt(r.min)}</option>`).join('');
+  const brText=st.brNow?`<b>Send breaks now.</b> Window closes at ${fmt(st.brNow.end)}. ${st.brNow.send} at a time.`:st.brNext?`Next break window opens at <b>${fmt(st.brNext.start)}</b> and runs to ${fmt(st.brNext.end)}.`:'No more break windows today. Work breaks into slow 15s after the rush.';
+  return `
+  <section class="card rv" style="--d:0;padding-block:12px">
+    <div class="timepick">
+      <span class="label">Time</span>
+      <select id="timeSel" aria-label="Time of day" ${LIVE?'disabled':''}>${opts}</select>
+      <button class="btn" id="tvBtn" type="button">Kitchen TV</button>
+      <label class="toggle" for="liveChk"><input type="checkbox" id="liveChk" ${LIVE?'checked':''}> Live clock (${fmt(currentMinutes())})</label>
+      <button class="btn" id="copyHuddle" type="button" style="margin-left:auto">Copy shift huddle</button>
+    </div>
+  </section>
+  <section class="status ${st.cls} rv" style="--d:1">
+    <span class="tag"><span class="dot"></span>${st.tag} · ${fmt(now)}</span>
+    ${cdBlock(st,now)}
+    <h2>${st.head}</h2><p>${st.sub}</p>
+    ${rail(an,now)}
+  </section>
+  <section class="card rv" style="--d:1.5"><h2>Today's peaks <small>Peak 15 for every daypart</small></h2><div class="peaks small">
+    ${an.peaks.map((p,i)=>p.none?`<div class="pk none"><div class="pkh"><h3>${p.dp}</h3><span class="lv">Ramp</span></div><span class="pt">${p.peakMin!=null?fmt(p.peakMin):'—'}</span><p class="note" style="margin:0">Busiest 15. ${p.why}.</p></div>`
+      :`<div class="pk tap ${p.level} ${now>=p.end?'done':''} ${st.target===p?'focus':''}" data-peak="${p.peakMin}" role="button" tabindex="0" aria-label="Check ${p.dp} peak at ${fmt(p.peakMin)} on the timeline"><div class="pkh"><h3>${p.dp}</h3><span class="lv">${now>=p.end?'Done':now>=p.start?'Now':LVL[p.level]}</span></div>
+        <span class="pt">${fmt(p.peakMin)}</span><div class="win">${fmt(p.start)} – ${fmt(p.end)} · ${dur(p.end-p.start)}</div>
+        <div class="row"><span>Crew</span><b><span class="f">${p.peakFoh}</span> / <span class="b">${p.peakBoh}</span></b></div></div>`).join('')}
+  </div></section>
+  <div class="grid2">
+    <section class="card rv" style="--d:2"><h2>On the clock now <small>${fmt(st.nowRow.min)} forecast ${money(st.nowRow.sales)}</small></h2>
+      <div class="crew"><div><span class="label">FOH</span><span class="big f">${cu(st.nowRow.foh,'int')}</span></div><div><span class="label">BOH</span><span class="big b">${cu(st.nowRow.boh,'int')}</span></div><div><span class="label">Total</span><span class="big">${cu(st.nowRow.crew,'int')}</span></div></div>
+      <p class="callout">${brText}</p>
+    </section>
+    <section class="card rv" style="--d:3"><h2>${t?(st.cur?'This rush':'Next rush'):'Rush'} <small>${t?t.name:'none left today'}</small></h2>
+      ${t?`<div class="crew"><div><span class="label">Starts</span><span class="mid">${fmt(t.start)}</span></div><div><span class="label">How long</span><span class="mid">${dur(t.end-t.start)}</span></div><div><span class="label">Peak</span><span class="mid">${fmt(t.peakMin)}</span></div></div>
+      <p class="callout">Crew for the peak: <b class="f">${t.peakFoh} FOH</b> and <b class="b">${t.peakBoh} BOH</b>. Everyone on position by <b>${fmt(t.start-15)}</b>. Stock-up from <b>${fmt(Math.max(an.open,t.start-45))}</b>.</p>`:'<p class="note">No rush left in the forecast. Run to the counts in the game plan.</p>'}
+    </section>
+  </div>
+  <section class="card rv" style="--d:4"><h2>Line positions ${t?'for the rush peak':'right now'} <small>${lu.am?'Breakfast board':'Lunch/dinner board'} · bars show how full each station is</small></h2>
+    <div class="cols">
+      <div><h3 class="b">BOH · ${t?t.peakBoh:st.nowRow.boh}</h3><div class="stations">${stationsHTML(lu.boh,'b','var(--red)')}</div></div>
+      <div><h3 class="f">FOH · ${t?t.peakFoh:st.nowRow.foh}</h3><div class="stations">${stationsHTML(lu.foh,'f','var(--foh)')}</div></div>
+    </div>
+  </section>
+  <section class="card rv" style="--d:5"><h2>Game plan <small>From ${fmt(now)} to close</small></h2>
+    <ol class="plan">${ev.length?ev.map((e,i)=>`<li class="${e.k} ${e.t+an.step<=now?'past':''} ${i===nextIdx?'next':''}"><span class="t">${fmt(e.t)}</span><div><div class="what">${e.w}</div><div class="det">${e.d}</div>${e.list?`<ul>${e.list.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}</div></li>`).join(''):'<li><span class="t">—</span><div class="what">Nothing left on the plan today.</div></li>'}</ol>
+  </section>
+  <section class="card rv" style="--d:6"><h2>Best break times today</h2>
+    <div class="breaks">${an.breaks.length?an.breaks.map(b=>`<div class="bw ${b===an.bestBreak?'best':''}"><b class="num">${fmt(b.start)} – ${fmt(b.end)}</b><span>${b.dp} · ${dur(b.end-b.start)} · send ${b.send} at a time${b===an.bestBreak?' · <strong class="good">best window</strong>':''}</span></div>`).join(''):'<p class="note">No clear slow windows. Rotate breaks one at a time in the slowest 15s.</p>'}</div>
+    <p class="note" style="margin-top:10px">Windows skip the 45 minutes before a rush and the 15 minutes after. Minors still get their breaks on time no matter what this says.</p>
+  </section>
+  <section class="card rv" style="--d:7"><h2>The day at a glance</h2><div class="chart">${salesChart(an,now)}</div>
+    <div class="legend"><span><i style="background:var(--red)"></i>Rush</span><span><i style="background:var(--band);outline:1px solid var(--faint)"></i>Normal range</span><span><i style="background:var(--warnsoft);outline:1px solid var(--warn)"></i>Stock-up / reset</span><span><i style="background:var(--oksoft);outline:1px solid var(--ok)"></i>Break window</span></div></section>`;
+}
+function huddleText(an){
+  const st=floorState(an,NOW),t=st.target;
+  const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
+  const list=d=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`${k} ${v}`).join(', ');
+  const L=[`HUEYTOWN HUDDLE · ${DAY==='all'?'':WD[+DAY]+' '}${fmt(NOW)}`,`${st.tag.toUpperCase()}: ${st.head}`,st.sub,'',`On the clock now: ${st.nowRow.foh} FOH / ${st.nowRow.boh} BOH`];
+  if(t){L.push(`${t.name}: ${fmt(t.start)}–${fmt(t.end)} (${dur(t.end-t.start)}), peak ${fmt(t.peakMin)}`,`Crew for the peak: ${t.peakFoh} FOH / ${t.peakBoh} BOH. On position by ${fmt(t.start-15)}.`,`Stock-up starts ${fmt(Math.max(an.open,t.start-45))}. Reset at ${fmt(t.end)}.`)}
+  L.push('','PEAKS TODAY',...an.peaks.map(p=>p.none?`${p.dp}: busiest 15 at ${fmt(p.peakMin)} (${p.why.toLowerCase()})`:`${p.dp}: peak ${fmt(p.peakMin)} · window ${fmt(p.start)}–${fmt(p.end)} · ${p.peakFoh} FOH / ${p.peakBoh} BOH${NOW>=p.end?' (done)':''}`));
+  L.push('',`BOH: ${list(lu.boh)}`,`FOH: ${list(lu.foh)}`);
+  if(st.brNow)L.push(`Breaks: send now until ${fmt(st.brNow.end)}, ${st.brNow.send} at a time.`);else if(st.brNext)L.push(`Breaks: next window ${fmt(st.brNext.start)}–${fmt(st.brNext.end)}.`);
+  return L.join('\n');
+}
+
+/* ===== countdown + kitchen TV ===== */
+let TV=false,tick=null,wake=null;
+const realClock=()=>LIVE&&NOW===currentMinutes();
+function cdTarget(st){const p=st.cur?{t:st.cur.end,l:`${st.cur.name} ends in`}:st.nextPeak&&st.nextPeak.start>NOW?{t:st.nextPeak.start,l:`${st.nextPeak.name} in`}:st.nextPeak?{t:st.nextPeak.peakMin,l:`${st.nextPeak.dp} peak in`}:null;return p}
+function cdBlock(st,now){const c=cdTarget(st);if(!c)return '';
+  return `<div class="cd"><span class="label">${c.l}</span><span class="cdv num" data-t="${c.t}">${cdText(c.t)}</span></div>`}
+function cdText(t){
+  if(!realClock())return dur(t-NOW);
+  const d=new Date(),sec=t*60-(d.getHours()*3600+d.getMinutes()*60+d.getSeconds());
+  if(sec<=0)return 'now';const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),x=sec%60;
+  return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0');
+}
+function startTick(){clearInterval(tick);tick=setInterval(()=>{
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=cdText(+el.dataset.t));
+  const c=$('tvClock');if(c){const d=new Date();c.textContent=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+},1000)}
+function renderTV(an){
+  const st=floorState(an,NOW),t=st.target,c=cdTarget(st);
+  const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
+  const ev=buildPlan(an).filter(e=>e.t>NOW).slice(0,3);
+  const chips=(d,cls)=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`<span class="tvchip ${cls}"><b>${v}</b>${k}</span>`).join('');
+  return `<div class="tv ${st.cls}">
+    <div class="tvtop"><span class="tvbrand">Rush Forecaster · ${DAY==='all'?'Today':WD[+DAY]}</span><span class="tvclock num" id="tvClock">${fmt(NOW)}</span><button class="btn" id="tvExit" type="button">Exit TV</button></div>
+    <div class="tvmain">
+      <div class="tvstatus"><span class="tag"><span class="dot"></span>${st.tag}</span><h2>${st.head}</h2><p>${st.sub}</p></div>
+      ${c?`<div class="tvcd"><span class="label">${c.l}</span><span class="num" data-t="${c.t}">${cdText(c.t)}</span></div>`:''}
+    </div>
+    <div class="tvgrid">
+      <div class="tvbox"><span class="label">On the clock now</span><div class="tvnums"><span class="f">${st.nowRow.foh}<small>FOH</small></span><span class="b">${st.nowRow.boh}<small>BOH</small></span></div></div>
+      <div class="tvbox"><span class="label">${t?`For the ${t.dp.toLowerCase()} peak · ${fmt(t.peakMin)}`:'Rest of day'}</span><div class="tvnums"><span class="f">${t?t.peakFoh:st.nowRow.foh}<small>FOH</small></span><span class="b">${t?t.peakBoh:st.nowRow.boh}<small>BOH</small></span></div></div>
+      <div class="tvbox wide"><span class="label">Positions</span><div class="tvchips">${chips(lu.boh,'b')}${chips(lu.foh,'f')}</div></div>
+      <div class="tvbox wide"><span class="label">Coming up</span><ol class="tvnext">${ev.length?ev.map(e=>`<li class="${e.k}"><b class="num">${fmt(e.t)}</b><span>${e.w}</span></li>`).join(''):'<li><span>Nothing left today. Close strong.</span></li>'}</ol></div>
+    </div>
+    <div class="tvpeaks">${an.peaks.filter(p=>!p.none).map(p=>`<span class="${NOW>=p.end?'done':st.target===p?'on':''}">${p.dp} <b class="num">${fmt(p.peakMin)}</b></span>`).join('')}</div>
+  </div>`;
+}
+function copyText(txt,anchor,msg){
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg)).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='width:100%;height:240px;margin-top:10px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,monospace';anchor.closest('.card').appendChild(ta);ta.select()});
+}
+
+/* ===== render ===== */
+function currentMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
+function dayOptions(){
+  const wds={};DATA.rows.forEach(r=>{if(r[1]!=null){(wds[r[1]]=wds[r[1]]||new Set()).add(r[0])}});
+  const keys=Object.keys(wds).map(Number).sort((a,b)=>a-b);
+  if(!keys.length)return [{v:'all',label:'All uploaded days'}];
+  return [{v:'all',label:'All days (average)'},...keys.map(k=>({v:String(k),label:`${WD[k]} · ${wds[k].size} day${wds[k].size>1?'s':''}`}))];
+}
+function render(animate=true){
+  const chip=$('dataChip'),nd=new Set(DATA.rows.map(r=>r[0])).size;
+  if(DATA.sample){chip.className='chip sample';chip.textContent=`Sample data · ${nd} days`}
+  else{chip.className='chip file';chip.textContent=`${nd} day${nd>1?'s':''} loaded`}
+  const opts=dayOptions();
+  if(DAY==null||!opts.some(o=>o.v===DAY)){const today=String(new Date().getDay());DAY=opts.some(o=>o.v===today)?today:opts[0].v}
+  $('daySel').innerHTML=opts.map(o=>`<option value="${o.v}" ${o.v===DAY?'selected':''}>${o.label}</option>`).join('');
+  $('seg').dataset.mode=MODE;$('mSched').setAttribute('aria-pressed',MODE==='sched');$('mFloor').setAttribute('aria-pressed',MODE==='floor');
+  const app=$('app');app.classList.toggle('calm',!animate);
+  const ds=datesFor(DAY),an=analyze(forecastFrom(ds));
+  if(!an){app.innerHTML=`<div class="err">No sales for this day in your data. Pick another day above.</div>`;return}
+  if(MODE==='floor'){
+    if(LIVE){NOW=currentMinutes();if(DATA.sample&&(NOW<an.open||NOW>=an.close))NOW=10*60+35}
+    else if(NOW==null)NOW=10*60+35;
+    document.body.classList.toggle('tvmode',TV);
+    if(TV){app.innerHTML=renderTV(an);$('tvExit').onclick=()=>{TV=false;try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}try{wake&&wake.release()}catch(e){}render()};startTick();clearInterval(timer);timer=setInterval(()=>render(false),60000);return}
+    if(SCRUB!=null&&(SCRUB<an.open||SCRUB>=an.close))SCRUB=null;
+    app.innerHTML=renderFloor(an);
+    wireRail(an);
+    $('tvBtn').onclick=()=>{TV=true;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
+      try{navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>wake=w).catch(()=>{})}catch(e){}render();window.scrollTo(0,0)};
+    $('liveChk').onchange=e=>{LIVE=e.target.checked;render()};
+    $('timeSel').onchange=e=>{NOW=+e.target.value;render(false)};
+    $('copyHuddle').onclick=()=>copyText(huddleText(an),$('copyHuddle'),'Huddle copied. Paste it in the group chat.');
+  }else{
+    document.body.classList.remove('tvmode');TV=false;
+    app.innerHTML=renderSched(an,ds);
+    $('copySched').onclick=()=>copyText(shiftText(),$('copySched'),'Shift list copied');
+    app.querySelectorAll('.wd').forEach(b=>b.onclick=()=>{DAY=b.dataset.wd;render();window.scrollTo({top:0,behavior:'smooth'})});
+  }
+  if(animate)countUp(app);
+  clearInterval(timer);clearInterval(tick);if(MODE==='floor'){startTick();if(LIVE)timer=setInterval(()=>render(false),60000)}
+}
+
+/* ===== wiring ===== */
+const FIELDS=['bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
+function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
+FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);render()}}));
+$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);fillSettings();render();toast('Settings reset')};
+$('useSample').onclick=()=>{DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
+$('daySel').onchange=e=>{DAY=e.target.value;SCRUB=null;render()};
+$('mSched').onclick=()=>{if(MODE==='sched')return;MODE='sched';save('rf_mode',MODE);render()};
+$('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
+$('csvFile').onchange=async e=>{
+  const files=[...e.target.files];if(!files.length)return;
+  const errs=[];let added=[];
+  for(const f of files){try{added=added.concat(parseCSV(await f.text(),f.name.replace(/\.(csv|txt)$/i,'')))}catch(err){errs.push(err.message)}}
+  e.target.value='';
+  if(added.length){
+    const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
+    const rows=base.filter(r=>!newDates.has(r[0])).concat(added);
+    DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
+    toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total`);
+  }
+  $('msg').innerHTML=errs.map(m=>`<div class="err">${esc(m)}</div>`).join('');
+};
+fillSettings();render();
+</script>
+
+</body></html>
