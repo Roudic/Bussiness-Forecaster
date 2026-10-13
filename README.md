@@ -8,3 +8,8 @@ Forecasts 15-minute sales, rushes, crew counts and break windows for Chick-fil-A
 Single self-contained `index.html`. Data stays in the browser (localStorage); nothing is uploaded anywhere.
 
 Live: https://roudic.github.io/Bussiness-Forecaster/
+
+## Deploying
+
+`.github/workflows/pages.yml` publishes `index.html` to GitHub Pages on every push to `main`.
+One-time setup: repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
