@@ -47,6 +47,7 @@ button,select,input{font:inherit;color:inherit}
 .brand .sub{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--panel2);color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .chip.sample{background:var(--warnsoft);color:var(--warn)} .chip.file{background:var(--oksoft);color:var(--ok)}
+.chip.saving{background:var(--warnsoft);color:var(--warn)} .chip.saved{background:var(--oksoft);color:var(--ok)} .chip.off{background:var(--redsoft);color:var(--redtext)}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;min-height:48px;transition:border-color .2s,background .2s,transform .15s}
 .btn:hover{border-color:var(--muted)} .btn:active{transform:scale(.97)}
@@ -176,6 +177,16 @@ td .f,td .b{font-weight:700}
 .st .cap{grid-column:1/-1;height:5px;border-radius:9px;background:var(--panel3);overflow:hidden}
 .st .cap i{display:block;height:100%;border-radius:9px;transform-origin:left;animation:fill .7s var(--ease) both;animation-delay:calc(var(--d,0)*50ms)}
 .st.zero{opacity:.4}
+.plist{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
+.plist li{display:grid;grid-template-columns:32px minmax(0,1fr) 44px 44px 44px;gap:6px;align-items:center}
+.plist .pn{font-family:var(--display);font-size:20px;font-weight:700;color:var(--muted);text-align:right}
+.plist input{min-width:0;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:44px;font-weight:700}
+.ib{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-weight:700;cursor:pointer;padding:0}
+.ib:disabled{opacity:.3;cursor:default}
+.psum{margin:8px 0 0}
+.mv{display:contents}
+@media (max-width:480px){#posCard{padding-inline:14px}.plist li{grid-template-columns:20px minmax(0,1fr) 40px 40px;gap:6px}.plist .pn{font-size:17px}.plist input{padding:8px}
+  .mv{display:grid;grid-template-rows:1fr 1fr;gap:3px}.mv .ib{min-height:24px;font-size:14px}}
 .plan{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .plan > li{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:start;padding:13px 15px;border-radius:14px;background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--faint)}
 .plan > li.rush,.plan > li.ready{border-left-color:var(--red)} .plan > li.stock,.plan > li.reset,.plan > li.cut{border-left-color:var(--warn)}
@@ -311,10 +322,11 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
       <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M12 2.5v3.5M18.5 7l1.6-1.6"/></svg></div>
       <div style="min-width:0">
         <h1>Rush Forecaster</h1>
-        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span></div>
+        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span> <span class="chip" id="syncChip" hidden></span></div>
       </div>
     </div>
     <div class="controls">
+      <button class="btn" id="cloudBtn" type="button" hidden>Sign in to save</button>
       <button class="btn primary" id="uploadBtn" type="button">Upload CSVs</button>
       <input type="file" id="csvFile" multiple class="vh" tabindex="-1" aria-hidden="true">
       <select id="daySel" aria-label="Day to forecast"></select>
@@ -597,7 +609,14 @@ function deployOrdered(n,order,cap){
   let guard=0;while(left>0&&guard++<10){let moved=false;for(const k of Object.keys(c)){if(left<=0)break;if(c[k]<cap[k]){c[k]++;left--;moved=true}}if(!moved)break}
   return {counts:c,extra:left,cap};
 }
-function lineup(foh,boh,min){const am=min<630;return {boh:deployOrdered(boh,am?BOH_ORDER_AM:BOH_ORDER,BOH_CAP),foh:deployOrdered(foh,FOH_ORDER,FOH_CAP),am}}
+/* editable boards: person 1 goes to the first spot, person 2 the next. A position listed twice holds two people. */
+const BOARDS=[['am','BOH · Breakfast','b'],['pm','BOH · Lunch & dinner','b'],['foh','FOH · All day','f']];
+const POS_DEF={am:BOH_ORDER_AM,pm:BOH_ORDER,foh:FOH_ORDER};
+function normPos(p){const o={};BOARDS.forEach(([k])=>{const v=p&&Array.isArray(p[k])?p[k].map(x=>String(x).trim().slice(0,40)).filter(Boolean).slice(0,40):null;o[k]=v&&v.length?v:[...POS_DEF[k]]});return o}
+let POS=normPos(load('rf_positions')),EDITPOS=false,DRAFT=null;
+const posCustom=()=>JSON.stringify(POS)!==JSON.stringify(normPos(null));
+function capsOf(list){const c={};list.forEach(k=>c[k]=(c[k]||0)+1);return c}
+function lineup(foh,boh,min){const am=min<630,b=am?POS.am:POS.pm;return {boh:deployOrdered(boh,b,capsOf(b)),foh:deployOrdered(foh,POS.foh,capsOf(POS.foh)),am}}
 
 /* ===== helpers ===== */
 const $=id=>document.getElementById(id);
@@ -829,7 +848,7 @@ function floorState(an,now){
   return {ci,cur,next,target,nextPeak,nowRow,brNow,brNext,cls,tag,head,sub};
 }
 function stationsHTML(d,cls,color){
-  return Object.entries(d.counts).map(([k,v],i)=>`<div class="st ${v?'':'zero'}"><span>${k}</span><span class="n ${cls}">${v}</span><span class="cap"><i style="--d:${i};width:${v/d.cap[k]*100}%;background:${color}"></i></span></div>`).join('')
+  return Object.entries(d.counts).map(([k,v],i)=>`<div class="st ${v?'':'zero'}"><span>${esc(k)}</span><span class="n ${cls}">${v}</span><span class="cap"><i style="--d:${i};width:${v/d.cap[k]*100}%;background:${color}"></i></span></div>`).join('')
     +(d.extra>0?`<div class="note">+${d.extra} more than the stations hold. Use them as runners or on prep.</div>`:'');
 }
 function rail(an,now){
@@ -938,11 +957,12 @@ function renderFloor(an){
       <p class="callout">Crew for the peak: <b class="f">${t.peakFoh} FOH</b> and <b class="b">${t.peakBoh} BOH</b>. Everyone on position by <b>${fmt(t.start-15)}</b>. Stock-up from <b>${fmt(Math.max(an.open,t.start-45))}</b>.</p>`:'<p class="note">No rush left in the forecast. Run to the counts in the game plan.</p>'}
     </section>
   </div>
-  <section class="card rv" style="--d:4"><h2>Line positions ${t?'for the rush peak':'right now'} <small>${lu.am?'Breakfast board':'Lunch/dinner board'} · bars show how full each station is</small></h2>
-    <div class="cols">
+  <section class="card rv" style="--d:4" id="posCard"><h2>Line positions ${EDITPOS?'· editing':t?'for the rush peak':'right now'} <small>${EDITPOS?'Set who goes where as the crew grows':`${lu.am?'Breakfast board':'Lunch/dinner board'} · bars show how full each station is`}</small></h2>
+    ${EDITPOS?`<div id="posEd">${posEditor()}</div>`:`<div class="cols">
       <div><h3 class="b">BOH · ${t?t.peakBoh:st.nowRow.boh}</h3><div class="stations">${stationsHTML(lu.boh,'b','var(--red)')}</div></div>
       <div><h3 class="f">FOH · ${t?t.peakFoh:st.nowRow.foh}</h3><div class="stations">${stationsHTML(lu.foh,'f','var(--foh)')}</div></div>
     </div>
+    <div class="controls" style="margin-top:14px"><button class="btn" id="editPos" type="button">Edit positions</button>${posCustom()?'<span class="note">Using your store\'s positions</span>':''}</div>`}
   </section>
   <section class="card rv" style="--d:5"><h2>Game plan <small>From ${fmt(now)} to close</small></h2>
     <ol class="plan">${ev.length?ev.map((e,i)=>`<li class="${e.k} ${e.t+an.step<=now?'past':''} ${i===nextIdx?'next':''}"><span class="t">${fmt(e.t)}</span><div><div class="what">${e.w}</div><div class="det">${e.d}</div>${e.list?`<ul>${e.list.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}</div></li>`).join(''):'<li><span class="t">—</span><div class="what">Nothing left on the plan today.</div></li>'}</ol>
@@ -953,6 +973,33 @@ function renderFloor(an){
   </section>
   <section class="card rv" style="--d:7"><h2>The day at a glance</h2><div class="chart">${salesChart(an,now)}</div>
     <div class="legend"><span><i style="background:var(--red)"></i>Rush</span><span><i style="background:var(--band);outline:1px solid var(--faint)"></i>Normal range</span><span><i style="background:var(--warnsoft);outline:1px solid var(--warn)"></i>Stock-up / reset</span><span><i style="background:var(--oksoft);outline:1px solid var(--ok)"></i>Break window</span></div></section>`;
+}
+function posEditor(){
+  const names=[...new Set([...Object.values(POS_DEF).flat(),...Object.values(DRAFT).flat()])];
+  return `<p class="note" style="margin-top:0">Person 1 is the first one on the board, person 2 the next, and so on. List a position twice and it holds two people. When the forecast calls for 6 BOH, spots 1–6 get filled.</p>
+  <div class="cols">${BOARDS.map(([k,label,cls])=>{const c=capsOf(DRAFT[k]);return `<div class="pboard"><h3 class="${cls}">${label} · ${DRAFT[k].length}</h3>
+    <ol class="plist">${DRAFT[k].map((n,i)=>`<li><span class="pn num">${i+1}</span><input value="${esc(n)}" list="posNames" maxlength="40" data-b="${k}" data-i="${i}" aria-label="${label} person ${i+1}"><span class="mv"><button class="ib" type="button" data-act="up" data-b="${k}" data-i="${i}" aria-label="Move up" ${i?'':'disabled'}>↑</button><button class="ib" type="button" data-act="down" data-b="${k}" data-i="${i}" aria-label="Move down" ${i<DRAFT[k].length-1?'':'disabled'}>↓</button></span><button class="ib" type="button" data-act="del" data-b="${k}" data-i="${i}" aria-label="Remove spot ${i+1}" ${DRAFT[k].length>1?'':'disabled'}>✕</button></li>`).join('')}</ol>
+    <button class="btn" type="button" data-act="add" data-b="${k}" style="width:100%">+ Add person</button>
+    <p class="note psum" id="psum_${k}">${Object.entries(c).map(([n,v])=>`${esc(n)} ${v}`).join(' · ')}</p></div>`}).join('')}</div>
+  <datalist id="posNames">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+  <div class="controls" style="margin-top:14px"><button class="btn primary" type="button" data-act="save">Save positions</button><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn" type="button" data-act="reset">Back to default</button></div>`;
+}
+function wirePosEditor(){
+  const card=$('posCard');if(!card)return;
+  const eb=$('editPos');if(eb)eb.onclick=()=>{EDITPOS=true;DRAFT=JSON.parse(JSON.stringify(POS));render(false);$('posCard').scrollIntoView({block:'start'})};
+  const ed=$('posEd');if(!ed)return;
+  const redraw=focusSel=>{ed.innerHTML=posEditor();const f=focusSel&&ed.querySelector(focusSel);f&&f.focus()};
+  // typing only refreshes the summary line; a full redraw here would eat the tap that ended the typing
+  ed.oninput=e=>{const x=e.target,k=x.dataset.b;if(!k)return;DRAFT[k][+x.dataset.i]=x.value;
+    $('psum_'+k).innerHTML=Object.entries(capsOf(DRAFT[k].map(n=>n.trim()).filter(Boolean))).map(([n,v])=>`${esc(n)} ${v}`).join(' · ')};
+  ed.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,k=b.dataset.b,i=+b.dataset.i,L=k&&DRAFT[k];
+    if(a==='add'){L.push(L[L.length-1]||'Runner');redraw(`input[data-b="${k}"][data-i="${L.length-1}"]`)}
+    else if(a==='del'){L.splice(i,1);redraw()}
+    else if(a==='up'&&i>0){[L[i-1],L[i]]=[L[i],L[i-1]];redraw(`[data-act="up"][data-b="${k}"][data-i="${i-1}"]`)}
+    else if(a==='down'&&i<L.length-1){[L[i+1],L[i]]=[L[i],L[i+1]];redraw(`[data-act="down"][data-b="${k}"][data-i="${i+1}"]`)}
+    else if(a==='reset'){if(confirm('Put all three boards back to the default positions?')){DRAFT=normPos(null);redraw()}}
+    else if(a==='cancel'){EDITPOS=false;DRAFT=null;render(false)}
+    else if(a==='save'){POS=normPos(DRAFT);save('rf_positions',POS);USER&&CLOUD.savePositions(POS);EDITPOS=false;DRAFT=null;render(false);toast('Positions saved');$('posCard')?.scrollIntoView({block:'start'})}};
 }
 function huddleText(an){
   const st=floorState(an,NOW),t=st.target;
@@ -986,7 +1033,7 @@ function renderTV(an){
   const st=floorState(an,NOW),t=st.target,c=cdTarget(st);
   const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
   const ev=buildPlan(an).filter(e=>e.t>NOW).slice(0,3);
-  const chips=(d,cls)=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`<span class="tvchip ${cls}"><b>${v}</b>${k}</span>`).join('');
+  const chips=(d,cls)=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`<span class="tvchip ${cls}"><b>${v}</b>${esc(k)}</span>`).join('');
   return `<div class="tv ${st.cls}">
     <div class="tvtop"><span class="tvbrand">Rush Forecaster · ${DAY==='all'?'Today':WD[+DAY]}</span><span class="tvclock num" id="tvClock">${fmt(NOW)}</span><button class="btn" id="tvExit" type="button">Exit TV</button></div>
     <div class="tvmain">
@@ -1033,6 +1080,7 @@ function render(animate=true){
     if(SCRUB!=null&&(SCRUB<an.open||SCRUB>=an.close))SCRUB=null;
     app.innerHTML=renderFloor(an);
     wireRail(an);
+    wirePosEditor();
     $('tvBtn').onclick=()=>{TV=true;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
       try{navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>wake=w).catch(()=>{})}catch(e){}render();window.scrollTo(0,0)};
     $('liveChk').onchange=e=>{LIVE=e.target.checked;render()};
@@ -1045,17 +1093,45 @@ function render(animate=true){
     app.querySelectorAll('.wd').forEach(b=>b.onclick=()=>{DAY=b.dataset.wd;render();window.scrollTo({top:0,behavior:'smooth'})});
   }
   if(animate)countUp(app);
-  clearInterval(timer);clearInterval(tick);if(MODE==='floor'){startTick();if(LIVE)timer=setInterval(()=>render(false),60000)}
+  clearInterval(timer);clearInterval(tick);if(MODE==='floor'){startTick();if(LIVE)timer=setInterval(()=>{if(!EDITPOS)render(false)},60000)}
 }
+
+/* ===== cloud save: the Firebase module at the bottom fills in CLOUD once it's configured ===== */
+let CLOUD=null,USER=null;
+const dayId=key=>'d_'+String(key).replace(/[^A-Za-z0-9_-]/g,'-');
+function rowsToDays(rows){const by={};rows.forEach(r=>{const d=by[r[0]]||(by[r[0]]={key:r[0],wd:r[1],dn:r[5],m:[],s:[],t:[]});d.m.push(r[2]);d.s.push(r[3]);d.t.push(r[4]??null)});return Object.values(by)}
+function daysToRows(days){return days.flatMap(d=>d.m.map((m,i)=>[d.key,d.wd??null,m,d.s[i],d.t?.[i]??null,d.dn??null]))}
+function syncChip(state){const c=$('syncChip');if(!USER){c.hidden=true;return}c.hidden=false;
+  const L={saving:['saving','Saving…'],offline:['saving','Offline · will sync'],saved:['saved','Saved to cloud'],error:['off','Cloud save failed']}[state]||['saved','Saved to cloud'];
+  c.className='chip '+L[0];c.textContent=L[1]}
+window.RF={
+  ready(api){CLOUD=api;$('cloudBtn').hidden=false},
+  auth(user){USER=user;const b=$('cloudBtn');
+    // a different person signing in on a shared iPad starts from their own cloud data, not the last person's
+    if(user){const owner=load('rf_owner');if(owner&&owner!==user.uid&&!DATA.sample){DATA=makeSample();drop('rf_data2');DAY=null;render(false)}save('rf_owner',user.uid)}
+    b.textContent=user?`${(user.displayName||user.email||'Signed in').split(' ')[0]} · Sign out`:'Sign in to save';
+    b.classList.toggle('primary',!user);syncChip('saving')},
+  localRows(){return DATA.sample?[]:DATA.rows},
+  cloudRows(rows){if(!rows.length)return;DATA={name:'',sample:false,rows};save('rf_data2',DATA);render(false)},
+  cloudSettings(cs){const n=Object.assign({},DEF,cs);if(JSON.stringify(n)===JSON.stringify(S))return;S=n;save('rf_settings',S);fillSettings();render(false)},
+  cloudPositions(p){const n=normPos(p);if(JSON.stringify(n)===JSON.stringify(POS))return;POS=n;save('rf_positions',POS);if(!EDITPOS)render(false)},
+  localPositions:()=>posCustom()?POS:null,
+  sync:syncChip,
+  error(e){console.error(e);syncChip('error');toast(e&&e.code==='permission-denied'?'Cloud said no. Check the Firestore rules.':'Cloud save hit a problem. Your data is still on this device.',true)}
+};
+$('cloudBtn').onclick=()=>{if(!CLOUD)return;if(!USER)CLOUD.signIn();else if(confirm('Sign out? Your sales stay saved in the cloud.'))CLOUD.signOut()};
 
 /* ===== wiring ===== */
 const FIELDS=['bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
 function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
-FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);render()}}));
-$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);fillSettings();render();toast('Settings reset')};
-$('useSample').onclick=()=>{DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
+FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
+$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
+$('useSample').onclick=async()=>{
+  if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
+    try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
+  DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
 $('daySel').onchange=e=>{DAY=e.target.value;SCRUB=null;render()};
-$('mSched').onclick=()=>{if(MODE==='sched')return;MODE='sched';save('rf_mode',MODE);render()};
+$('mSched').onclick=()=>{if(MODE==='sched')return;EDITPOS=false;MODE='sched';save('rf_mode',MODE);render()};
 $('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
 $('uploadBtn').onclick=()=>$('csvFile').click();
 function readFile(f){
@@ -1071,12 +1147,64 @@ $('csvFile').onchange=async e=>{
     const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
     const rows=base.filter(r=>!newDates.has(r[0])).concat(added);
     DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
+    if(USER)CLOUD.saveRows(added).catch(RF.error);
     toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total`);
   }
   $('msg').innerHTML=errs.map(m=>`<div class="err">${esc(m)}</div>`).join('');
   if(errs.length){$('msg').scrollIntoView({behavior:'smooth',block:'center'});if(!added.length)toast(errs.length>1?`${errs.length} files couldn't be read`:`Couldn't read that file`,true)}
 };
 fillSettings();render();
+</script>
+
+<script type="module">
+/* ===== Firebase: every uploaded day is saved under your Google account, so it follows you to any device.
+   Paste your web app config from Firebase console → Project settings → Your apps. Leave null to keep data on this device only. ===== */
+const FIREBASE_CONFIG=null;
+const SDK='https://www.gstatic.com/firebasejs/10.14.1/';
+const EMU=window.RF_EMULATOR; // set only by the local test harness
+const config=EMU?{apiKey:'demo-key',authDomain:'demo-rf.firebaseapp.com',projectId:'demo-rf'}:FIREBASE_CONFIG;
+if(config)try{
+  const [{initializeApp},A,F]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(f=>import(SDK+f)));
+  const app=initializeApp(config),auth=A.getAuth(app);
+  // offline cache: uploads made with no signal queue up and send when it comes back
+  let db;try{db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(e){db=F.getFirestore(app)}
+  if(EMU){A.connectAuthEmulator(auth,`http://${EMU}:9099`,{disableWarnings:true});F.connectFirestoreEmulator(db,EMU,8080)}
+  const days=uid=>F.collection(db,'users',uid,'days');
+  async function writeDays(list){for(let i=0;i<list.length;i+=400){const b=F.writeBatch(db);
+    list.slice(i,i+400).forEach(d=>b.set(F.doc(days(auth.currentUser.uid),dayId(d.key)),{...d,updated:F.serverTimestamp()}));await b.commit()}}
+  let stop=[];
+  RF.ready({
+    async signIn(){const p=new A.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
+      try{await A.signInWithPopup(auth,p)}catch(e){
+        if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')return A.signInWithRedirect(auth,p);
+        if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')RF.error(e)}},
+    signOut:()=>A.signOut(auth),
+    saveRows:rows=>writeDays(rowsToDays(rows)),
+    savePositions:p=>F.setDoc(F.doc(db,'users',auth.currentUser.uid),{positions:p},{merge:true}).catch(RF.error),
+    saveSettings:s=>F.setDoc(F.doc(db,'users',auth.currentUser.uid),{settings:s},{merge:true}).catch(RF.error),
+    async deleteAll(){const snap=await F.getDocs(days(auth.currentUser.uid));
+      for(let i=0;i<snap.docs.length;i+=400){const b=F.writeBatch(db);snap.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}},
+    ...(EMU?{testSignIn:(email)=>A.signInWithCredential(auth,A.GoogleAuthProvider.credential(JSON.stringify({sub:email,email,name:'Test Manager',email_verified:true})))}:{})
+  });
+  A.onAuthStateChanged(auth,user=>{
+    stop.forEach(f=>f());stop=[];RF.auth(user);if(!user)return;
+    let synced=false;
+    stop.push(F.onSnapshot(days(user.uid),{includeMetadataChanges:true},snap=>{
+      RF.sync(snap.metadata.hasPendingWrites?'saving':snap.metadata.fromCache?'offline':'saved');
+      if(!synced&&!snap.metadata.fromCache){synced=true;
+        // first time on this device: push up any days it has that the cloud doesn't
+        const have=new Set(snap.docs.map(d=>d.data().key));
+        const mine=rowsToDays(RF.localRows()).filter(d=>!have.has(d.key));
+        if(mine.length){writeDays(mine).catch(RF.error);return}}
+      if(snap.docChanges().length)RF.cloudRows(daysToRows(snap.docs.map(d=>d.data())));
+    },RF.error));
+    stop.push(F.onSnapshot(F.doc(db,'users',user.uid),snap=>{const d=snap.data(),m=snap.metadata;if(m.hasPendingWrites)return;
+      if(d?.settings)RF.cloudSettings(d.settings);
+      if(d?.positions)RF.cloudPositions(d.positions);
+      else if(!m.fromCache&&RF.localPositions())F.setDoc(snap.ref,{positions:RF.localPositions()},{merge:true}).catch(RF.error);
+    },RF.error));
+  });
+}catch(e){console.error('Cloud save is off:',e)}
 </script>
 
 </body></html>
