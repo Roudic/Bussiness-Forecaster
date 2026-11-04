@@ -20,7 +20,7 @@
   --ok:#3DC48D; --oksoft:#112B22; --warn:#F2AA3C; --warnsoft:#33260F; --foh:#6FA9FF; --fohsoft:#152340; --band:rgba(246,240,242,.07);
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --ease:cubic-bezier(.2,.8,.2,1);
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.56,.64,1);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -136,20 +136,56 @@ td .f,td .b{font-weight:700}
 .status.steady{border-color:#245441;background:linear-gradient(135deg,var(--oksoft),var(--panel));--sglow:rgba(61,196,141,.18)} .status.steady .tag{color:var(--ok)}
 .status.closed .tag{color:var(--muted)} .status.closed .dot::after{display:none}
 
-.rail{position:relative;height:44px;margin-top:10px;border-radius:12px;background:var(--panel3);overflow:hidden;z-index:1}
-.rail .seg2{position:absolute;top:0;bottom:0}
-.rail .r{background:linear-gradient(180deg,var(--red),var(--red2))} .rail .s{background:rgba(242,170,60,.45)} .rail .k{background:rgba(61,196,141,.35)}
-.rail .done{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.45);transition:width 1s var(--ease)}
-.rail .nowm{position:absolute;top:-2px;bottom:-2px;width:3px;background:var(--fg);box-shadow:0 0 12px rgba(255,255,255,.8);transition:left 1s var(--ease)}
-/* interactive rail */
-.rail{height:56px;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-.rail:focus-visible{outline:3px solid var(--warn);outline-offset:3px}
-.rail .pm{position:absolute;top:0;bottom:0;width:4px;background:var(--warn);box-shadow:0 0 14px rgba(242,170,60,.9);pointer-events:none;z-index:2}
-.rail .pm b{position:absolute;top:4px;left:8px;font-family:var(--display);font-size:16px;font-weight:700;background:var(--bg);color:var(--warn);padding:1px 6px;border-radius:6px;white-space:nowrap}
-.railhint{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:13px;color:var(--muted);position:relative;z-index:1}
+/* timeline: sales silhouette over the day's bands; tap pins one 15, drag reads a range */
+.railhint{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13px;color:var(--muted);position:relative;z-index:1}
 .railhint .lgd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 8px;vertical-align:-1px}
-.railhint .lgd i.r{background:var(--red)} .railhint .lgd i.s{background:rgba(242,170,60,.6)} .railhint .lgd i.k{background:rgba(61,196,141,.55)}
-.probe{position:relative;z-index:1;margin-top:12px;background:var(--panel2);border:1px solid var(--warn);border-radius:16px;padding:14px 16px;display:grid;gap:10px;animation:rise .3s var(--ease) both}
+.railhint .lgd i.r{background:var(--red)} .railhint .lgd i.s{background:var(--warn)} .railhint .lgd i.k{background:var(--ok)}
+.railbox{position:relative;margin-top:46px;z-index:1}
+.rail{position:relative;height:68px;border-radius:14px;background:linear-gradient(180deg,var(--panel3),var(--panel2));overflow:hidden;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;box-shadow:inset 0 1px 0 var(--hi),inset 0 0 0 1px var(--line)}
+.rail:focus-visible{outline:3px solid var(--warn);outline-offset:3px}
+.rail .bands,.rail .strip{position:absolute;inset:0;pointer-events:none}
+.rail .strip{top:auto;height:5px}
+.rail .seg2{position:absolute;top:0;bottom:0}
+.rail .bands .seg2{opacity:.15}
+.rail .r{background:var(--red)} .rail .s{background:var(--warn)} .rail .k{background:var(--ok)}
+.rspark{position:absolute;left:0;top:8px;width:100%;height:calc(100% - 13px);pointer-events:none}
+.rail .done{position:absolute;inset:0 auto 0 0;background:rgba(10,6,8,.55);transition:width 1s var(--ease);pointer-events:none}
+.rail .nowm{position:absolute;top:0;bottom:0;width:2px;background:var(--fg);box-shadow:0 0 10px rgba(255,255,255,.7);pointer-events:none}
+.rband{position:absolute;top:0;bottom:0;background:linear-gradient(180deg,rgba(242,170,60,.32),rgba(242,170,60,.14));box-shadow:inset 2px 0 0 var(--warn),inset -2px 0 0 var(--warn);transition:left .3s var(--spring),width .3s var(--spring);pointer-events:none}
+.pin{position:absolute;top:0;left:0;height:68px;width:0;pointer-events:none;z-index:3;transition:left .45s var(--spring)}
+.pin::before{content:"";position:absolute;top:-8px;bottom:-4px;left:-1.5px;width:3px;border-radius:3px;background:var(--warn);box-shadow:0 0 18px rgba(242,170,60,.9)}
+.pin i,.pin .ring{position:absolute;top:-15px;left:-8px;width:16px;height:16px;border-radius:50%}
+.pin i{background:var(--warn);border:3px solid var(--bg);box-shadow:0 0 0 2px var(--warn)}
+.pin .ring{border:2px solid var(--warn);opacity:0}
+.pin.pop .ring{animation:pinpop .7s var(--ease)}
+.pin.pop i{animation:pinbounce .5s var(--spring)}
+.pbub{position:absolute;left:0;top:-48px;display:flex;align-items:baseline;gap:6px;background:var(--fg);color:var(--bg);border-radius:10px;padding:4px 10px;font-family:var(--display);font-weight:700;font-size:18px;line-height:1.2;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 6px 18px rgba(0,0,0,.45);pointer-events:none;transition:transform .45s var(--spring);z-index:4}
+.pbub small{font-family:var(--body);font-size:12px;font-weight:700;opacity:.65}
+.rh{position:absolute;top:34px;left:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:var(--warn);border:3px solid var(--bg);box-shadow:0 3px 12px rgba(0,0,0,.55);cursor:ew-resize;touch-action:none;z-index:5;transition:left .3s var(--spring),transform .15s}
+.rh::after{content:"";position:absolute;inset:7px 9px;border-inline:2px solid rgba(17,13,15,.6)}
+.rh:active{transform:scale(1.15)}
+.railbox.dragging .pin,.railbox.dragging .pbub,.railbox.dragging .rh,.railbox.dragging .rband{transition:none}
+.status.ahead{border-color:var(--foh);background:linear-gradient(135deg,var(--fohsoft),var(--panel));--sglow:rgba(111,169,255,.22)} .status.ahead .tag{color:var(--foh)} .status.ahead .dot::after{display:none}
+.clockseg{display:inline-grid;grid-auto-flow:column;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px;max-width:100%}
+.clockseg button{border:0;background:transparent;color:var(--muted);font-weight:700;padding:8px 14px;border-radius:10px;min-height:40px;cursor:pointer;white-space:nowrap;transition:background .25s,color .25s}
+.clockseg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.clockseg .lvd{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:7px;vertical-align:1px}
+.clockseg button[aria-pressed="true"] .lvd{animation:blink 1.6s ease-in-out infinite}
+@media (max-width:560px){.clockseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.clockseg button{padding:8px 6px;white-space:normal;line-height:1.15}}
+@keyframes pinpop{0%{transform:scale(.6);opacity:1}100%{transform:scale(3);opacity:0}}
+@keyframes pinbounce{0%{transform:translateY(-10px) scale(.6)}100%{transform:none}}
+@keyframes blink{50%{opacity:.35}}
+@keyframes swap{from{opacity:.4;transform:translateY(5px)}}
+.probe{position:relative;z-index:1;margin-top:14px;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid rgba(242,170,60,.55);border-radius:18px;padding:14px 16px;box-shadow:0 12px 30px rgba(0,0,0,.35);animation:rise .3s var(--ease) both}
+.probe .pbody{display:grid;gap:10px}
+.probe .pbody.swap{animation:swap .28s var(--ease)}
+.probe .pgrid small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.probe .rgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,128px),1fr))}
+.probe .ctx{display:flex;flex-wrap:wrap;gap:6px}
+.probe .ctx span{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--panel3);color:var(--muted);font-variant-numeric:tabular-nums}
+.probe .ctx .up{color:var(--ok)} .probe .ctx .down{color:var(--warn)}
+.probe .rtags{display:flex;flex-wrap:wrap;gap:6px}
+.probe .mbars{display:block;width:100%;height:70px}
 .probe .ph{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
 .probe .pt2{font-family:var(--display);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
 .probe .zp{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:999px;background:var(--panel3)}
@@ -160,7 +196,7 @@ td .f,td .b{font-weight:700}
 .probe .pgrid b{font-family:var(--display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
 .probe .pbtns{display:flex;flex-wrap:wrap;gap:8px}
 .probe .pbtns .primary{flex:1 1 180px}
-@media (max-width:480px){.probe .pgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.rail{height:64px}}
+@media (max-width:480px){.probe .pgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pk.tap{cursor:pointer;transition:transform .15s,border-color .2s}.pk.tap:active{transform:scale(.98)}
 .railx{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px;position:relative;z-index:1;font-variant-numeric:tabular-nums}
 
@@ -839,7 +875,7 @@ function floorState(an,now){
   const brNow=an.breaks.find(b=>now>=b.start&&now<b.end),brNext=an.breaks.find(b=>b.start>now);
   let cls,tag,head,sub;
   if(now<an.open){cls='steady';tag='Before open';head=`Doors at ${fmt(an.open)}`;sub=next?`First rush: ${next.name.toLowerCase()} at ${fmt(next.start)}, about ${dur(next.end-next.start)}.`:'No rush forecast today.'}
-  else if(now>=an.close){cls='closed';tag='Closed';head='Day is done';sub='Turn off the live clock and pick a time to walk the day.'}
+  else if(now>=an.close){cls='closed';tag='Closed';head='Day is done';sub='Switch to Look ahead to plan the whole day, or Pick a time to walk it.'}
   else if(cur&&cur.level==='light'){cls='coming';tag='Light bump';head=`${cur.name}: peak at ${fmt(cur.peakMin)}`;sub=`Small push until ${fmt(cur.end)}. Hold ${cur.peakFoh} FOH / ${cur.peakBoh} BOH on the line and keep breaks moving.`}
   else if(cur){cls='inrush';tag='In the rush';head=`${cur.name}: ${dur(cur.end-now)} left`;sub=`Peak at ${fmt(cur.peakMin)}. Hold positions. No breaks until ${fmt(cur.end)}, then reset.`}
   else if(next&&next.level!=='light'&&next.start-now<=45){cls='coming';tag='Rush coming';head=`${next.name} in ${dur(next.start-now)}`;sub=`Starts ${fmt(next.start)} and runs about ${dur(next.end-next.start)} to ${fmt(next.end)}. Finish stock-up and pull breaks back now.`}
@@ -853,106 +889,205 @@ function stationsHTML(d,cls,color){
 }
 function rail(an,now){
   const span=an.close-an.open,p=m=>Math.min(100,Math.max(0,(m-an.open)/span*100));
-  let s=`<div class="railhint"><span>Tap or drag the bar to check any time</span><span class="lgd"><i class="r"></i>Rush <i class="s"></i>Stock/reset <i class="k"></i>Breaks</span></div><div class="rail" id="rail" role="slider" tabindex="0" aria-label="Day timeline. Use arrow keys to check a time." aria-valuemin="${an.open}" aria-valuemax="${an.close}" aria-valuenow="${SCRUB??now}" aria-valuetext="${fmt(SCRUB??now)}">`;
-  an.breaks.forEach(b=>s+=`<span class="seg2 k" style="left:${p(b.start)}%;width:${p(b.end)-p(b.start)}%"></span>`);
-  an.rushes.forEach(r=>{if(r.level==='light'){s+=`<span class="seg2 s" style="left:${p(r.start)}%;width:${p(r.end)-p(r.start)}%"></span>`;return}s+=`<span class="seg2 s" style="left:${p(r.start-45)}%;width:${p(r.start)-p(r.start-45)}%"></span><span class="seg2 ${r.level==='light'?'s':'r'}" style="left:${p(r.start)}%;width:${p(r.end)-p(r.start)}%"></span><span class="seg2 s" style="left:${p(r.end)}%;width:${p(r.end+30)-p(r.end)}%"></span>`});
-  s+=`<span class="done" style="width:${p(now)}%"></span>`;
-  if(now>=an.open&&now<=an.close)s+=`<span class="nowm" style="left:calc(${p(now)}% - 1px)"></span>`;
-  s+=`<span class="pm" id="pm" style="left:calc(${p(SCRUB??an.open)}% - 2px)" ${SCRUB==null?'hidden':''}><b>${SCRUB==null?'':fmtShort(SCRUB)}</b></span>`;
-  s+='</div><div class="railx">';
-  for(let m=Math.ceil(an.open/120)*120;m<=an.close;m+=120)s+=`<span>${fmtShort(m)}</span>`;
-  return s+`</div><div class="probe" id="probe" aria-live="polite" ${SCRUB==null?'hidden':''}>${SCRUB==null?'':probeHTML(an,SCRUB)}</div>`;
+  const seg=(c,a,b)=>`<span class="seg2 ${c}" style="left:${p(a)}%;width:${p(b)-p(a)}%"></span>`;
+  let bands='';
+  an.breaks.forEach(b=>bands+=seg('k',b.start,b.end));
+  an.rushes.forEach(r=>{bands+=r.level==='light'?seg('s',r.start,r.end):seg('s',r.start-45,r.start)+seg('r',r.start,r.end)+seg('s',r.end,r.end+30)});
+  // the day's sales as a soft silhouette
+  const mx=Math.max(...an.L.map(r=>r.sales))||1;
+  const pts=an.L.map(r=>[((r.min+an.step/2-an.open)/span*1000).toFixed(1),(100-r.sales/mx*94).toFixed(1)]);
+  const line=pts.map((q,i)=>(i?'L':'M')+q[0]+' '+q[1]).join('');
+  const area=`M0 100L0 ${pts[0][1]}${line.replace(/^M/,'L')}L1000 ${pts[pts.length-1][1]}L1000 100Z`;
+  let ticks='';for(let m=Math.ceil(an.open/120)*120;m<=an.close;m+=120)ticks+=`<span>${fmtShort(m)}</span>`;
+  return `<div class="railhint"><span>Tap to pin a time · drag across to read a stretch</span><span class="lgd"><i class="r"></i>Rush <i class="s"></i>Stock/reset <i class="k"></i>Breaks</span></div>
+  <div class="railbox" id="railbox">
+    <div class="rail" id="rail" role="slider" tabindex="0" aria-label="Day timeline. Tap to pin a time, drag for a range. Arrow keys move, Shift and arrows stretch a range." aria-valuemin="${an.open}" aria-valuemax="${an.close}" aria-valuenow="${an.open}" aria-valuetext="${fmt(an.open)}">
+      <div class="bands">${bands}</div>
+      <svg class="rspark" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="rsg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6F0F2" stop-opacity=".34"/><stop offset="1" stop-color="#F6F0F2" stop-opacity=".02"/></linearGradient></defs><path d="${area}" fill="url(#rsg)"/><path d="${line}" fill="none" stroke="#F6F0F2" stroke-opacity=".8" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+      <div class="strip">${bands}</div>
+      ${AHEAD?'':`<span class="done" style="width:${p(now)}%"></span>`}
+      ${!AHEAD&&now>=an.open&&now<=an.close?`<span class="nowm" style="left:calc(${p(now)}% - 1px)"></span>`:''}
+      <span class="rband" id="rband" hidden></span>
+    </div>
+    <span class="pin" id="pin" hidden><span class="ring"></span><i></i></span>
+    <span class="rh" id="rhA" data-h="a" hidden></span><span class="rh" id="rhB" data-h="b" hidden></span>
+    <span class="pbub" id="pbub" hidden></span>
+  </div>
+  <div class="railx">${ticks}</div>
+  <div class="probe" id="probe" aria-live="polite" hidden></div>`;
 }
-/* ---- tap-to-examine: pinpoint any 15 on the day rail ---- */
-let SCRUB=null;
+/* ---- timeline explorer: pin one 15 or read a whole stretch ---- */
+let SCRUB=null,RANGE=null,CLOCK='live',AHEAD=false;
+function setClock(c){CLOCK=c;LIVE=c==='live';AHEAD=c==='ahead'}
+const rowAt=(an,m)=>an.L.find(r=>r.min===m)||an.L[an.L.length-1];
+const snap15=(an,m)=>Math.min(an.close-an.step,Math.max(an.open,an.open+Math.floor((m-an.open)/an.step)*an.step));
+const railPct=(an,m)=>Math.min(100,Math.max(0,(m-an.open)/(an.close-an.open)*100));
+const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(4)}catch(e){}};
+function zoneOf(an,m){
+  const r=an.rushes.find(x=>m>=x.start&&m<x.end),stk=an.rushes.find(x=>x.level!=='light'&&m>=x.start-45&&m<x.start),
+    rst=an.rushes.find(x=>x.level!=='light'&&m>=x.end&&m<x.end+30),br=an.breaks.find(b=>m>=b.start&&m<b.end),nx=an.rushes.find(x=>x.start>m);
+  if(r)return {cls:r.level==='light'?'meh':'bad',tag:`${r.name} · ${LVL[r.level]}`,desc:`Runs ${fmt(r.start)} – ${fmt(r.end)}. ${m===r.peakMin?'<b>This is the peak 15.</b>':`Peak at ${fmt(r.peakMin)}.`} Hold ${r.peakFoh} FOH / ${r.peakBoh} BOH. ${r.level==='light'?'Keep breaks moving.':'No breaks.'}`};
+  if(stk)return {cls:'meh',tag:'Stock-up',desc:`${stk.name} starts in ${dur(stk.start-m)} at ${fmt(stk.start)}. Finish stock, pull breaks back, everyone on position by ${fmt(stk.start-15)}.`};
+  if(rst)return {cls:'meh',tag:'Reset',desc:`Clean and restock after the ${rst.name.toLowerCase()} until ${fmt(rst.end+30)}.`};
+  if(br)return {cls:'good',tag:'Break window',desc:`Send ${br.send} at a time until ${fmt(br.end)}.${an.bestBreak===br?' Best window of the day.':''}`};
+  return {cls:'',tag:'Steady',desc:nx?`Next: ${nx.name.toLowerCase()} at ${fmt(nx.start)}, ${dur(nx.start-m)} out. Stock and clean.`:'No more rushes after this. Cut to minimums as counts drop.'};
+}
 function probeHTML(an,m){
-  const row=an.L.find(r=>m>=r.min&&m<r.min+an.step)||an.L[an.L.length-1];
-  const r=an.rushes.find(x=>m>=x.start&&m<x.end);
-  const stk=an.rushes.find(x=>x.level!=='light'&&m>=x.start-45&&m<x.start);
-  const rst=an.rushes.find(x=>x.level!=='light'&&m>=x.end&&m<x.end+30);
-  const br=an.breaks.find(b=>m>=b.start&&m<b.end);
-  const nx=an.rushes.find(x=>x.start>m);
-  let cls,tag,desc;
-  if(r){cls=r.level==='light'?'meh':'bad';tag=`${r.name} · ${LVL[r.level]}`;desc=`Runs ${fmt(r.start)} – ${fmt(r.end)}. ${m===r.peakMin?'<b>This is the peak 15.</b>':`Peak at ${fmt(r.peakMin)}.`} Hold ${r.peakFoh} FOH / ${r.peakBoh} BOH. ${r.level==='light'?'Keep breaks moving.':'No breaks.'}`}
-  else if(stk){cls='meh';tag='Stock-up';desc=`${stk.name} starts in ${dur(stk.start-m)} at ${fmt(stk.start)}. Finish stock, pull breaks back, everyone on position by ${fmt(stk.start-15)}.`}
-  else if(rst){cls='meh';tag='Reset';desc=`Clean and restock after the ${rst.name.toLowerCase()} until ${fmt(rst.end+30)}.`}
-  else if(br){cls='good';tag='Break window';desc=`Send ${br.send} at a time until ${fmt(br.end)}.${an.bestBreak===br?' Best window of the day.':''}`}
-  else{cls='';tag='Steady';desc=nx?`Next: ${nx.name.toLowerCase()} at ${fmt(nx.start)}, ${dur(nx.start-m)} out. Stock and clean.`:'No more rushes after this. Cut to minimums as counts drop.'}
-  const rel=m===NOW?'right now':m>NOW?`${dur(m-NOW)} from now`:`${dur(NOW-m)} ago`;
-  return `<div class="ph"><span class="pt2">${fmt(m)}</span><span class="zp ${cls}">${tag}</span><span class="note">${rel}</span></div>
-    <p class="zd">${desc}</p>
+  const row=rowAt(an,m),i=an.L.indexOf(row),prev=an.L[i-1],next=an.L[i+1],z=zoneOf(an,m);
+  const rel=AHEAD?(m===an.open?'at open':`${dur(m-an.open)} after open`):NOW>=m&&NOW<m+an.step?'right now':m>NOW?`${dur(m-NOW)} from now`:`${dur(NOW-m)} ago`;
+  const vp=prev&&prev.sales>0?(row.sales/prev.sales-1)*100:null;
+  const ctx=[vp!=null?`<span class="${vp>=0?'up':'down'}">${vp>=0?'▲':'▼'} ${Math.abs(vp).toFixed(0)}% vs the 15 before</span>`:'',
+    `<span>${(row.sales/an.mean).toFixed(1)}× an average 15</span>`,
+    row.high>row.low?`<span>Usually ${money(row.low)}–${money(row.high)}</span>`:'',
+    row.trans!=null?`<span>~${Math.round(row.trans)} transactions</span>`:'',
+    next?`<span>Next 15 ${money(next.sales)}</span>`:''].join('');
+  return `<div class="ph"><span class="pt2">${fmt(m)}</span><span class="zp ${z.cls}">${z.tag}</span><span class="note">${rel}</span></div>
+    <p class="zd">${z.desc}</p>
     <div class="pgrid"><div><span class="label">Sales / 15</span><b>${money(row.sales)}</b></div><div><span class="label">FOH</span><b class="f">${row.foh}</b></div><div><span class="label">BOH</span><b class="b">${row.boh}</b></div><div><span class="label">Total</span><b>${row.crew}</b></div></div>
+    <div class="ctx">${ctx}</div>
     <div class="pbtns"><button class="btn" type="button" data-act="prev" aria-label="15 minutes earlier">‹ 15</button><button class="btn" type="button" data-act="next" aria-label="15 minutes later">15 ›</button><button class="btn primary" type="button" data-act="go">Walk the day from ${fmt(m)}</button><button class="btn" type="button" data-act="close" aria-label="Close">✕</button></div>`;
 }
-function setProbe(an,m){
-  if(m==null){SCRUB=null;const pr=$('probe'),pm=$('pm');if(pr)pr.hidden=true;if(pm)pm.hidden=true;return}
-  m=Math.min(an.close-an.step,Math.max(an.open,Math.round(m/an.step)*an.step));
-  const changed=m!==SCRUB;SCRUB=m;
-  const span=an.close-an.open,pct=(m-an.open)/span*100;
-  const pm=$('pm'),pr=$('probe'),el=$('rail');
-  if(pm){pm.hidden=false;pm.style.left=`calc(${pct}% - 2px)`;pm.firstElementChild.textContent=fmtShort(m)}
-  if(pr){pr.hidden=false;pr.innerHTML=probeHTML(an,m)}
-  if(el){el.setAttribute('aria-valuenow',m);el.setAttribute('aria-valuetext',fmt(m))}
-  if(changed)try{navigator.vibrate&&navigator.vibrate(4)}catch(e){}
+function rangeStats(an,a,b){
+  const R=an.L.filter(r=>r.min>=a&&r.min<b);if(!R.length)return null;
+  const tot=R.reduce((s,r)=>s+r.sales,0),hrs=R.reduce((s,r)=>s+r.crew*an.step/60,0);
+  let pk=R[0];R.forEach(r=>{if(r.sales>pk.sales)pk=r});
+  const mm=k=>[Math.min(...R.map(r=>r[k])),Math.max(...R.map(r=>r[k]))];
+  return {R,tot,hrs,pk,foh:mm('foh'),boh:mm('boh'),share:tot/an.total,low:R.reduce((s,r)=>s+r.low,0),high:R.reduce((s,r)=>s+r.high,0),
+    tr:R.some(r=>r.trans!=null)?R.reduce((s,r)=>s+(r.trans||0),0):null,
+    rush:an.rushes.filter(r=>r.start<b&&r.end>a),brk:an.breaks.filter(x=>x.start<b&&x.end>a)};
 }
+function rangeHTML(an,a,b,grow){
+  const s=rangeStats(an,a,b);if(!s)return '<p class="zd">No forecast sales in that stretch.</p>';
+  const lh=([x,y])=>x===y?x:`${x}–${y}`,n=s.R.length,W=600,H=70,bw=W/n,mx=Math.max(...s.R.map(r=>r.sales))||1;
+  const bars=s.R.map((r,i)=>{const h=r.sales/mx*(H-6);return `<rect class="${grow?'gb':''}" style="--i:${i}" x="${(i*bw+bw*.14).toFixed(1)}" y="${(H-h).toFixed(1)}" width="${Math.max(1,bw*.72).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${r===s.pk?'var(--warn)':r.level==='light'?'rgba(242,170,60,.5)':r.level?'var(--red)':'var(--faint)'}"><title>${fmt(r.min)} · ${money(r.sales)}</title></rect>`}).join('');
+  const tags=[...s.rush.map(r=>`<span class="zp ${r.level==='light'?'meh':'bad'}">${r.name}</span>`),...s.brk.map(x=>`<span class="zp good">Break ${fmtShort(x.start)}–${fmtShort(x.end)}</span>`)].join('')||'<span class="zp">Steady stretch</span>';
+  return `<div class="ph"><span class="pt2">${fmt(a)} – ${fmt(b)}</span><span class="note">${dur(b-a)} · ${n} fifteen${n>1?'s':''}</span></div>
+    <div class="rtags">${tags}</div>
+    <svg class="mbars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Sales by 15 minutes in this stretch">${bars}</svg>
+    <div class="pgrid rgrid">
+      <div><span class="label">Sales</span><b>${money(s.tot)}</b><small>${(s.share*100).toFixed(0)}% of the day${s.high>s.low?` · usually ${money(s.low)}–${money(s.high)}`:''}</small></div>
+      <div><span class="label">Busiest 15</span><b>${fmtShort(s.pk.min)}</b><small>${money(s.pk.sales)}</small></div>
+      <div><span class="label">FOH</span><b class="f">${lh(s.foh)}</b><small>${s.foh[0]===s.foh[1]?'the whole time':'low to high'}</small></div>
+      <div><span class="label">BOH</span><b class="b">${lh(s.boh)}</b><small>${s.boh[0]===s.boh[1]?'the whole time':'low to high'}</small></div>
+      <div><span class="label">Labor hrs</span><b>${s.hrs.toFixed(1)}</b><small>$${Math.round(s.tot/s.hrs)} SPLH</small></div>
+      <div><span class="label">Avg / 15</span><b>${money(s.tot/n)}</b><small>${(s.tot/n/an.mean).toFixed(1)}× an average 15</small></div>
+      ${s.tr!=null?`<div><span class="label">Transactions</span><b>${Math.round(s.tr)}</b><small>~${Math.round(s.tr/n)} per 15</small></div>`:''}
+    </div>
+    <div class="pbtns"><button class="btn primary" type="button" data-act="go">Walk the day from ${fmt(a)}</button><button class="btn" type="button" data-act="copy">Copy for the group chat</button><button class="btn" type="button" data-act="close" aria-label="Close">✕</button></div>`;
+}
+function rangeText(an,a,b){const s=rangeStats(an,a,b);if(!s)return '';
+  return [`${DAY==='all'?'Average day':WD[+DAY]} ${fmt(a)} – ${fmt(b)} (${dur(b-a)})`,`Sales ${money(s.tot)} (${(s.share*100).toFixed(0)}% of the day)`,`Busiest 15: ${fmt(s.pk.min)}, ${money(s.pk.sales)}`,
+    `Crew: ${s.foh[0]===s.foh[1]?s.foh[0]:s.foh.join('–')} FOH / ${s.boh[0]===s.boh[1]?s.boh[0]:s.boh.join('–')} BOH`,`Labor ${s.hrs.toFixed(1)} hrs · $${Math.round(s.tot/s.hrs)} SPLH`,
+    ...s.rush.map(r=>`${r.name}: ${fmt(r.start)}–${fmt(r.end)}, peak ${fmt(r.peakMin)}`),...s.brk.map(x=>`Break window ${fmt(x.start)}–${fmt(x.end)}`)].join('\n')}
+function paintRail(an,pop,grow){
+  const box=$('railbox');if(!box)return;
+  const pin=$('pin'),bub=$('pbub'),band=$('rband'),hA=$('rhA'),hB=$('rhB'),pr=$('probe'),el=$('rail'),W=box.clientWidth;
+  // anything appearing for the first time lands in place instead of sliding in from the left edge
+  const show=(node,fn)=>{if(node.hidden){node.hidden=false;node.style.transition='none';fn();void node.offsetWidth;node.style.transition=''}else fn()};
+  const bubble=(x,html)=>show(bub,()=>{bub.innerHTML=html;const bw=bub.offsetWidth;bub.style.transform=`translateX(${Math.max(0,Math.min(W-bw,x/100*W-bw/2))}px)`});
+  const body=html=>{const fresh=pr.hidden;pr.hidden=false;pr.innerHTML=`<div class="pbody ${fresh?'':'swap'}">${html}</div>`};
+  if(RANGE){
+    const a=railPct(an,RANGE.a),b=railPct(an,RANGE.b);pin.hidden=true;
+    show(band,()=>{band.style.left=a+'%';band.style.width=(b-a)+'%'});show(hA,()=>hA.style.left=a+'%');show(hB,()=>hB.style.left=b+'%');
+    bubble((a+b)/2,`${fmtShort(RANGE.a)}–${fmtShort(RANGE.b)}<small>${money(rangeStats(an,RANGE.a,RANGE.b)?.tot||0)}</small>`);
+    body(rangeHTML(an,RANGE.a,RANGE.b,grow));
+    el.setAttribute('aria-valuenow',RANGE.a);el.setAttribute('aria-valuetext',`${fmt(RANGE.a)} to ${fmt(RANGE.b)}`);
+  }else if(SCRUB!=null){
+    const x=railPct(an,SCRUB+an.step/2);band.hidden=hA.hidden=hB.hidden=true;
+    show(pin,()=>pin.style.left=x+'%');
+    if(pop){pin.classList.remove('pop');void pin.offsetWidth;pin.classList.add('pop')}
+    bubble(x,`${fmtShort(SCRUB)}<small>${money(rowAt(an,SCRUB).sales)}</small>`);
+    body(probeHTML(an,SCRUB));
+    el.setAttribute('aria-valuenow',SCRUB);el.setAttribute('aria-valuetext',fmt(SCRUB));
+  }else{pin.hidden=band.hidden=hA.hidden=hB.hidden=bub.hidden=pr.hidden=true}
+}
+function setPoint(an,m,pop=true){RANGE=null;if(m==null)SCRUB=null;else{const n=snap15(an,m);if(n!==SCRUB)buzz();SCRUB=n}paintRail(an,pop)}
+function setRange(an,a,b,grow){const x=snap15(an,Math.min(a,b)),y=snap15(an,Math.max(a,b))+an.step;
+  const same=RANGE&&RANGE.a===x&&RANGE.b===y;SCRUB=null;RANGE={a:x,b:y};if(!same)buzz();if(!same||grow)paintRail(an,false,grow)}
 function wireRail(an){
-  const el=$('rail');if(!el)return;
-  const span=an.close-an.open;
-  const toMin=x=>{const b=el.getBoundingClientRect();const f=Math.min(1,Math.max(0,(x-b.left)/b.width));return an.open+f*span};
-  let drag=false;
-  el.onpointerdown=e=>{drag=true;try{el.setPointerCapture(e.pointerId)}catch(_){}setProbe(an,toMin(e.clientX))};
-  el.onpointermove=e=>{if(drag)setProbe(an,toMin(e.clientX))};
-  el.onpointerup=el.onpointercancel=()=>{drag=false};
-  el.onkeydown=e=>{const cur=SCRUB??NOW;
-    if(e.key==='ArrowRight'||e.key==='ArrowUp'){setProbe(an,cur+an.step);e.preventDefault()}
-    else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){setProbe(an,cur-an.step);e.preventDefault()}
-    else if(e.key==='Home'){setProbe(an,an.open);e.preventDefault()}
-    else if(e.key==='End'){setProbe(an,an.close);e.preventDefault()}
-    else if(e.key==='Escape')setProbe(an,null)};
-  const pr=$('probe');
-  if(pr)pr.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
-    if(a==='prev')setProbe(an,SCRUB-an.step);
-    else if(a==='next')setProbe(an,SCRUB+an.step);
-    else if(a==='close'){setProbe(an,null);el.focus()}
-    else if(a==='go'){LIVE=false;NOW=SCRUB;SCRUB=null;render(false);const s=document.querySelector('.status');s&&s.scrollIntoView({behavior:'smooth',block:'start'})}};
-  document.querySelectorAll('.pk[data-peak]').forEach(c=>{const go=()=>{setProbe(an,+c.dataset.peak);el.scrollIntoView({behavior:'smooth',block:'center'})};
+  const el=$('rail'),box=$('railbox');if(!el)return;
+  const hA=$('rhA'),hB=$('rhB'),pr=$('probe'),span=an.close-an.open;
+  const toMin=x=>{const b=el.getBoundingClientRect();return an.open+Math.min(1,Math.max(0,(x-b.left)/b.width))*span};
+  let g=null;
+  el.onpointerdown=e=>{g={kind:'new',x0:e.clientX,m0:toMin(e.clientX),moved:false};try{el.setPointerCapture(e.pointerId)}catch(_){}};
+  [hA,hB].forEach(h=>h.onpointerdown=e=>{e.stopPropagation();if(!RANGE)return;
+    g={kind:'edge',fixed:h.dataset.h==='a'?RANGE.b-an.step:RANGE.a,moved:true};box.classList.add('dragging');try{h.setPointerCapture(e.pointerId)}catch(_){}});
+  const move=e=>{if(!g)return;const m=toMin(e.clientX);
+    if(g.kind==='new'){if(!g.moved&&Math.abs(e.clientX-g.x0)<8)return;g.moved=true;box.classList.add('dragging');setRange(an,g.m0,m)}
+    else setRange(an,g.fixed,m)};
+  const up=()=>{if(!g)return;const k=g;g=null;box.classList.remove('dragging');
+    if(k.kind==='new'&&!k.moved)setPoint(an,k.m0);else if(RANGE)setRange(an,RANGE.a,RANGE.b-an.step,true)};
+  [el,hA,hB].forEach(n=>{n.onpointermove=move;n.onpointerup=up;n.onpointercancel=up});
+  el.onkeydown=e=>{const k=e.key,st=an.step;
+    if(k==='Escape'){setPoint(an,null);return}
+    if(k==='Home'||k==='End'){e.preventDefault();setPoint(an,k==='Home'?an.open:an.close);return}
+    const d=k==='ArrowRight'||k==='ArrowUp'?st:k==='ArrowLeft'||k==='ArrowDown'?-st:0;if(!d)return;e.preventDefault();
+    const base=SCRUB??(RANGE?RANGE.a:(AHEAD?an.open:NOW));
+    if(e.shiftKey){const a=RANGE?RANGE.a:base,end=RANGE?RANGE.b-st:base;setRange(an,a,end+d,true)}
+    else setPoint(an,base+(SCRUB!=null||RANGE?d:0))};
+  pr.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+    if(a==='prev')setPoint(an,SCRUB-an.step);
+    else if(a==='next')setPoint(an,SCRUB+an.step);
+    else if(a==='close'){setPoint(an,null);el.focus()}
+    else if(a==='copy')copyText(rangeText(an,RANGE.a,RANGE.b),b,'Copied. Paste it in the group chat.');
+    else if(a==='go'){const m=RANGE?RANGE.a:SCRUB;setClock('pick');NOW=m;SCRUB=RANGE=null;render(false);document.querySelector('.status')?.scrollIntoView({behavior:'smooth',block:'start'})}};
+  // a rush card selects its whole window; a ramp card pins its busiest 15
+  document.querySelectorAll('.pk[data-peak]').forEach(c=>{const go=()=>{c.dataset.from?setRange(an,+c.dataset.from,+c.dataset.to-an.step,true):setPoint(an,+c.dataset.peak);el.scrollIntoView({behavior:'smooth',block:'center'})};
     c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+  window.onresize=()=>paintRail(an,false);
+  paintRail(an,false);
+}
+function aheadState(an){
+  const big=an.rushes.filter(r=>r.level!=='light'),pool=big.length?big:an.rushes;
+  const top=[...pool].sort((x,y)=>y.peakSales-x.peakSales)[0]||null,n=pool.length;
+  return {top,cls:'ahead',tag:`Look ahead · ${DAY==='all'?'average day':WD[+DAY]}`,
+    head:top?`${n} ${big.length?'rush':'bump'}${n>1?'es':''}, biggest at ${fmt(top.peakMin)}`:'No rushes forecast',
+    sub:`${money(an.total)} forecast · open ${fmt(an.open)} – ${fmt(an.close)} · peak crew ${an.peakFoh} FOH / ${an.peakBoh} BOH. Tap or drag the bar to explore any part of the day.`};
 }
 function renderFloor(an){
-  const now=NOW,st=floorState(an,now),t=st.target;
+  const now=NOW,A=AHEAD,st=floorState(an,now),ah=A?aheadState(an):null,t=A?ah.top:st.target,hd=A?ah:st;
   const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
-  const ev=buildPlan(an).filter(e=>e.t>=now-an.step);
-  const nextIdx=ev.findIndex(e=>e.t>now);
+  const ev=A?buildPlan(an):buildPlan(an).filter(e=>e.t>=now-an.step);
+  const nextIdx=A?-1:ev.findIndex(e=>e.t>now),done=p=>!A&&now>=p.end;
+  const tw=(new Date().getDay()+1)%7,hasTw=dayOptions().some(o=>o.v===String(tw));
+  const first=an.L[0],last=an.L[an.L.length-1],peakRow=an.L.reduce((m,r)=>r.crew>m.crew?r:m,an.L[0]);
+  const fb=r=>`<span class="f">${r.foh}</span> / <span class="b">${r.boh}</span>`;
   const opts=an.L.map(r=>`<option value="${r.min}" ${st.ci>=0&&r.min===an.L[st.ci].min?'selected':''}>${fmt(r.min)}</option>`).join('');
   const brText=st.brNow?`<b>Send breaks now.</b> Window closes at ${fmt(st.brNow.end)}. ${st.brNow.send} at a time.`:st.brNext?`Next break window opens at <b>${fmt(st.brNext.start)}</b> and runs to ${fmt(st.brNext.end)}.`:'No more break windows today. Work breaks into slow 15s after the rush.';
   return `
   <section class="card rv" style="--d:0;padding-block:12px">
     <div class="timepick">
-      <span class="label">Time</span>
-      <select id="timeSel" aria-label="Time of day" ${LIVE?'disabled':''}>${opts}</select>
-      <button class="btn" id="tvBtn" type="button">Kitchen TV</button>
-      <label class="toggle" for="liveChk"><input type="checkbox" id="liveChk" ${LIVE?'checked':''}> Live clock (${fmt(currentMinutes())})</label>
-      <button class="btn" id="copyHuddle" type="button" style="margin-left:auto">Copy shift huddle</button>
+      <div class="clockseg" id="clockSeg" role="group" aria-label="Which time to show">
+        <button type="button" data-clock="live" aria-pressed="${CLOCK==='live'}"><span class="lvd"></span>Live ${fmt(currentMinutes())}</button>
+        <button type="button" data-clock="pick" aria-pressed="${CLOCK==='pick'}">Pick a time</button>
+        <button type="button" data-clock="ahead" aria-pressed="${CLOCK==='ahead'}">Look ahead</button>
+      </div>
+      ${CLOCK==='pick'?`<select id="timeSel" aria-label="Time of day">${opts}</select>`:''}
+      ${A?`<button class="btn" id="tmrwBtn" type="button" ${hasTw?'':'disabled title="No days like that in your data yet"'}>Tomorrow · ${WD[tw]}</button>`:`<button class="btn" id="tvBtn" type="button">Kitchen TV</button>`}
+      <button class="btn" id="copyHuddle" type="button" style="margin-left:auto">${A?'Copy day plan':'Copy shift huddle'}</button>
     </div>
   </section>
-  <section class="status ${st.cls} rv" style="--d:1">
-    <span class="tag"><span class="dot"></span>${st.tag} · ${fmt(now)}</span>
-    ${cdBlock(st,now)}
-    <h2>${st.head}</h2><p>${st.sub}</p>
+  <section class="status ${hd.cls} rv" style="--d:1">
+    <span class="tag"><span class="dot"></span>${A?hd.tag:`${st.tag} · ${fmt(now)}`}</span>
+    ${A?'':cdBlock(st,now)}
+    <h2>${hd.head}</h2><p>${hd.sub}</p>
     ${rail(an,now)}
   </section>
-  <section class="card rv" style="--d:1.5"><h2>Today's peaks <small>Peak 15 for every daypart</small></h2><div class="peaks small">
-    ${an.peaks.map((p,i)=>p.none?`<div class="pk none"><div class="pkh"><h3>${p.dp}</h3><span class="lv">Ramp</span></div><span class="pt">${p.peakMin!=null?fmt(p.peakMin):'—'}</span><p class="note" style="margin:0">Busiest 15. ${p.why}.</p></div>`
-      :`<div class="pk tap ${p.level} ${now>=p.end?'done':''} ${st.target===p?'focus':''}" data-peak="${p.peakMin}" role="button" tabindex="0" aria-label="Check ${p.dp} peak at ${fmt(p.peakMin)} on the timeline"><div class="pkh"><h3>${p.dp}</h3><span class="lv">${now>=p.end?'Done':now>=p.start?'Now':LVL[p.level]}</span></div>
+  <section class="card rv" style="--d:1.5"><h2>${A?'The day\'s peaks':'Today\'s peaks'} <small>Tap one to see its whole window on the timeline</small></h2><div class="peaks small">
+    ${an.peaks.map((p,i)=>p.none?`<div class="pk none ${p.peakMin!=null?'tap':''}" ${p.peakMin!=null?`data-peak="${p.peakMin}" role="button" tabindex="0"`:''}><div class="pkh"><h3>${p.dp}</h3><span class="lv">Ramp</span></div><span class="pt">${p.peakMin!=null?fmt(p.peakMin):'—'}</span><p class="note" style="margin:0">Busiest 15. ${p.why}.</p></div>`
+      :`<div class="pk tap ${p.level} ${done(p)?'done':''} ${t===p?'focus':''}" data-peak="${p.peakMin}" data-from="${p.start}" data-to="${p.end}" role="button" tabindex="0" aria-label="Show the ${p.dp} rush window ${fmt(p.start)} to ${fmt(p.end)} on the timeline"><div class="pkh"><h3>${p.dp}</h3><span class="lv">${A?LVL[p.level]:done(p)?'Done':now>=p.start?'Now':LVL[p.level]}</span></div>
         <span class="pt">${fmt(p.peakMin)}</span><div class="win">${fmt(p.start)} – ${fmt(p.end)} · ${dur(p.end-p.start)}</div>
         <div class="row"><span>Crew</span><b><span class="f">${p.peakFoh}</span> / <span class="b">${p.peakBoh}</span></b></div></div>`).join('')}
   </div></section>
   <div class="grid2">
-    <section class="card rv" style="--d:2"><h2>On the clock now <small>${fmt(st.nowRow.min)} forecast ${money(st.nowRow.sales)}</small></h2>
+    ${A?`<section class="card rv" style="--d:2"><h2>Crew through the day <small>${an.laborHrs.toFixed(1)} labor hrs</small></h2>
+      <div class="crew"><div><span class="label">Open · ${fmtShort(first.min)}</span><span class="mid">${fb(first)}</span></div><div><span class="label">Peak · ${fmtShort(peakRow.min)}</span><span class="mid">${fb(peakRow)}</span></div><div><span class="label">Close · ${fmtShort(last.min)}</span><span class="mid">${fb(last)}</span></div></div>
+      <p class="callout">${an.bestBreak?`Best break window: <b>${fmt(an.bestBreak.start)} – ${fmt(an.bestBreak.end)}</b>, send ${an.bestBreak.send} at a time.`:'No clear break window. Rotate breaks in the slowest 15s.'}</p>
+    </section>`:`<section class="card rv" style="--d:2"><h2>On the clock now <small>${fmt(st.nowRow.min)} forecast ${money(st.nowRow.sales)}</small></h2>
       <div class="crew"><div><span class="label">FOH</span><span class="big f">${cu(st.nowRow.foh,'int')}</span></div><div><span class="label">BOH</span><span class="big b">${cu(st.nowRow.boh,'int')}</span></div><div><span class="label">Total</span><span class="big">${cu(st.nowRow.crew,'int')}</span></div></div>
       <p class="callout">${brText}</p>
-    </section>
-    <section class="card rv" style="--d:3"><h2>${t?(st.cur?'This rush':'Next rush'):'Rush'} <small>${t?t.name:'none left today'}</small></h2>
+    </section>`}
+    <section class="card rv" style="--d:3"><h2>${A?'Biggest rush':t?(st.cur?'This rush':'Next rush'):'Rush'} <small>${t?t.name:A?'none forecast':'none left today'}</small></h2>
       ${t?`<div class="crew"><div><span class="label">Starts</span><span class="mid">${fmt(t.start)}</span></div><div><span class="label">How long</span><span class="mid">${dur(t.end-t.start)}</span></div><div><span class="label">Peak</span><span class="mid">${fmt(t.peakMin)}</span></div></div>
       <p class="callout">Crew for the peak: <b class="f">${t.peakFoh} FOH</b> and <b class="b">${t.peakBoh} BOH</b>. Everyone on position by <b>${fmt(t.start-15)}</b>. Stock-up from <b>${fmt(Math.max(an.open,t.start-45))}</b>.</p>`:'<p class="note">No rush left in the forecast. Run to the counts in the game plan.</p>'}
     </section>
@@ -964,14 +1099,14 @@ function renderFloor(an){
     </div>
     <div class="controls" style="margin-top:14px"><button class="btn" id="editPos" type="button">Edit positions</button>${posCustom()?'<span class="note">Using your store\'s positions</span>':''}</div>`}
   </section>
-  <section class="card rv" style="--d:5"><h2>Game plan <small>From ${fmt(now)} to close</small></h2>
-    <ol class="plan">${ev.length?ev.map((e,i)=>`<li class="${e.k} ${e.t+an.step<=now?'past':''} ${i===nextIdx?'next':''}"><span class="t">${fmt(e.t)}</span><div><div class="what">${e.w}</div><div class="det">${e.d}</div>${e.list?`<ul>${e.list.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}</div></li>`).join(''):'<li><span class="t">—</span><div class="what">Nothing left on the plan today.</div></li>'}</ol>
+  <section class="card rv" style="--d:5"><h2>${A?'Full day plan':'Game plan'} <small>${A?`Open ${fmt(an.open)} to close`:`From ${fmt(now)} to close`}</small></h2>
+    <ol class="plan">${ev.length?ev.map((e,i)=>`<li class="${e.k} ${!A&&e.t+an.step<=now?'past':''} ${i===nextIdx?'next':''}"><span class="t">${fmt(e.t)}</span><div><div class="what">${e.w}</div><div class="det">${e.d}</div>${e.list?`<ul>${e.list.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}</div></li>`).join(''):'<li><span class="t">—</span><div class="what">Nothing left on the plan today.</div></li>'}</ol>
   </section>
   <section class="card rv" style="--d:6"><h2>Best break times today</h2>
     <div class="breaks">${an.breaks.length?an.breaks.map(b=>`<div class="bw ${b===an.bestBreak?'best':''}"><b class="num">${fmt(b.start)} – ${fmt(b.end)}</b><span>${b.dp} · ${dur(b.end-b.start)} · send ${b.send} at a time${b===an.bestBreak?' · <strong class="good">best window</strong>':''}</span></div>`).join(''):'<p class="note">No clear slow windows. Rotate breaks one at a time in the slowest 15s.</p>'}</div>
     <p class="note" style="margin-top:10px">Windows skip the 45 minutes before a rush and the 15 minutes after. Minors still get their breaks on time no matter what this says.</p>
   </section>
-  <section class="card rv" style="--d:7"><h2>The day at a glance</h2><div class="chart">${salesChart(an,now)}</div>
+  <section class="card rv" style="--d:7"><h2>The day at a glance</h2><div class="chart">${salesChart(an,A?null:now)}</div>
     <div class="legend"><span><i style="background:var(--red)"></i>Rush</span><span><i style="background:var(--band);outline:1px solid var(--faint)"></i>Normal range</span><span><i style="background:var(--warnsoft);outline:1px solid var(--warn)"></i>Stock-up / reset</span><span><i style="background:var(--oksoft);outline:1px solid var(--ok)"></i>Break window</span></div></section>`;
 }
 function posEditor(){
@@ -1002,6 +1137,10 @@ function wirePosEditor(){
     else if(a==='save'){POS=normPos(DRAFT);save('rf_positions',POS);USER&&CLOUD.savePositions(POS);EDITPOS=false;DRAFT=null;render(false);toast('Positions saved');$('posCard')?.scrollIntoView({block:'start'})}};
 }
 function huddleText(an){
+  if(AHEAD){const a=aheadState(an);
+    return [`HUEYTOWN DAY PLAN · ${DAY==='all'?'Average day':WD[+DAY]}`,a.head,`Forecast ${money(an.total)} · ${fmt(an.open)}–${fmt(an.close)} · peak crew ${an.peakFoh} FOH / ${an.peakBoh} BOH`,'',
+      'PEAKS',...an.peaks.map(p=>p.none?`${p.dp}: busiest 15 at ${fmt(p.peakMin)}`:`${p.dp}: peak ${fmt(p.peakMin)} · window ${fmt(p.start)}–${fmt(p.end)} · ${p.peakFoh} FOH / ${p.peakBoh} BOH`),'',
+      'PLAN',...buildPlan(an).map(e=>`${fmt(e.t).padStart(8)}  ${e.w}`)].join('\n')}
   const st=floorState(an,NOW),t=st.target;
   const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
   const list=d=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`${k} ${v}`).join(', ');
@@ -1050,7 +1189,7 @@ function renderTV(an){
   </div>`;
 }
 function copyText(txt,anchor,msg){
-  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg)).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='width:100%;height:240px;margin-top:10px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,monospace';anchor.closest('.card').appendChild(ta);ta.select()});
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(msg)).catch(()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='width:100%;height:240px;margin-top:10px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,monospace';(anchor.closest('.card,.status,.probe')||document.body).appendChild(ta);ta.select()});
 }
 
 /* ===== render ===== */
@@ -1078,13 +1217,15 @@ function render(animate=true){
     document.body.classList.toggle('tvmode',TV);
     if(TV){app.innerHTML=renderTV(an);$('tvExit').onclick=()=>{TV=false;try{document.fullscreenElement&&document.exitFullscreen()}catch(e){}try{wake&&wake.release()}catch(e){}render()};startTick();clearInterval(timer);timer=setInterval(()=>render(false),60000);return}
     if(SCRUB!=null&&(SCRUB<an.open||SCRUB>=an.close))SCRUB=null;
+    if(RANGE&&(RANGE.a<an.open||RANGE.b>an.close))RANGE=null;
     app.innerHTML=renderFloor(an);
     wireRail(an);
     wirePosEditor();
-    $('tvBtn').onclick=()=>{TV=true;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
+    $('clockSeg').onclick=e=>{const b=e.target.closest('[data-clock]');if(!b||b.dataset.clock===CLOCK)return;setClock(b.dataset.clock);render()};
+    if($('tmrwBtn'))$('tmrwBtn').onclick=()=>{DAY=String((new Date().getDay()+1)%7);SCRUB=RANGE=null;render()};
+    if($('tvBtn'))$('tvBtn').onclick=()=>{TV=true;try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
       try{navigator.wakeLock&&navigator.wakeLock.request('screen').then(w=>wake=w).catch(()=>{})}catch(e){}render();window.scrollTo(0,0)};
-    $('liveChk').onchange=e=>{LIVE=e.target.checked;render()};
-    $('timeSel').onchange=e=>{NOW=+e.target.value;render(false)};
+    if($('timeSel'))$('timeSel').onchange=e=>{NOW=+e.target.value;render(false)};
     $('copyHuddle').onclick=()=>copyText(huddleText(an),$('copyHuddle'),'Huddle copied. Paste it in the group chat.');
   }else{
     document.body.classList.remove('tvmode');TV=false;
@@ -1130,7 +1271,7 @@ $('useSample').onclick=async()=>{
   if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
     try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
   DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
-$('daySel').onchange=e=>{DAY=e.target.value;SCRUB=null;render()};
+$('daySel').onchange=e=>{DAY=e.target.value;SCRUB=RANGE=null;render()};
 $('mSched').onclick=()=>{if(MODE==='sched')return;EDITPOS=false;MODE='sched';save('rf_mode',MODE);render()};
 $('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
 $('uploadBtn').onclick=()=>$('csvFile').click();
