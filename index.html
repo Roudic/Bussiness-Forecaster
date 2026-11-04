@@ -47,6 +47,7 @@ button,select,input{font:inherit;color:inherit}
 .brand .sub{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--panel2);color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .chip.sample{background:var(--warnsoft);color:var(--warn)} .chip.file{background:var(--oksoft);color:var(--ok)}
+.chip.saving{background:var(--warnsoft);color:var(--warn)} .chip.saved{background:var(--oksoft);color:var(--ok)} .chip.off{background:var(--redsoft);color:var(--redtext)}
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;min-height:48px;transition:border-color .2s,background .2s,transform .15s}
 .btn:hover{border-color:var(--muted)} .btn:active{transform:scale(.97)}
@@ -311,10 +312,11 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
       <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M12 2.5v3.5M18.5 7l1.6-1.6"/></svg></div>
       <div style="min-width:0">
         <h1>Rush Forecaster</h1>
-        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span></div>
+        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span> <span class="chip" id="syncChip" hidden></span></div>
       </div>
     </div>
     <div class="controls">
+      <button class="btn" id="cloudBtn" type="button" hidden>Sign in to save</button>
       <button class="btn primary" id="uploadBtn" type="button">Upload CSVs</button>
       <input type="file" id="csvFile" multiple class="vh" tabindex="-1" aria-hidden="true">
       <select id="daySel" aria-label="Day to forecast"></select>
@@ -1048,12 +1050,38 @@ function render(animate=true){
   clearInterval(timer);clearInterval(tick);if(MODE==='floor'){startTick();if(LIVE)timer=setInterval(()=>render(false),60000)}
 }
 
+/* ===== cloud save: the Firebase module at the bottom fills in CLOUD once it's configured ===== */
+let CLOUD=null,USER=null;
+const dayId=key=>'d_'+String(key).replace(/[^A-Za-z0-9_-]/g,'-');
+function rowsToDays(rows){const by={};rows.forEach(r=>{const d=by[r[0]]||(by[r[0]]={key:r[0],wd:r[1],dn:r[5],m:[],s:[],t:[]});d.m.push(r[2]);d.s.push(r[3]);d.t.push(r[4]??null)});return Object.values(by)}
+function daysToRows(days){return days.flatMap(d=>d.m.map((m,i)=>[d.key,d.wd??null,m,d.s[i],d.t?.[i]??null,d.dn??null]))}
+function syncChip(state){const c=$('syncChip');if(!USER){c.hidden=true;return}c.hidden=false;
+  const L={saving:['saving','Saving…'],offline:['saving','Offline · will sync'],saved:['saved','Saved to cloud'],error:['off','Cloud save failed']}[state]||['saved','Saved to cloud'];
+  c.className='chip '+L[0];c.textContent=L[1]}
+window.RF={
+  ready(api){CLOUD=api;$('cloudBtn').hidden=false},
+  auth(user){USER=user;const b=$('cloudBtn');
+    // a different person signing in on a shared iPad starts from their own cloud data, not the last person's
+    if(user){const owner=load('rf_owner');if(owner&&owner!==user.uid&&!DATA.sample){DATA=makeSample();drop('rf_data2');DAY=null;render(false)}save('rf_owner',user.uid)}
+    b.textContent=user?`${(user.displayName||user.email||'Signed in').split(' ')[0]} · Sign out`:'Sign in to save';
+    b.classList.toggle('primary',!user);syncChip('saving')},
+  localRows(){return DATA.sample?[]:DATA.rows},
+  cloudRows(rows){if(!rows.length)return;DATA={name:'',sample:false,rows};save('rf_data2',DATA);render(false)},
+  cloudSettings(cs){const n=Object.assign({},DEF,cs);if(JSON.stringify(n)===JSON.stringify(S))return;S=n;save('rf_settings',S);fillSettings();render(false)},
+  sync:syncChip,
+  error(e){console.error(e);syncChip('error');toast(e&&e.code==='permission-denied'?'Cloud said no. Check the Firestore rules.':'Cloud save hit a problem. Your data is still on this device.',true)}
+};
+$('cloudBtn').onclick=()=>{if(!CLOUD)return;if(!USER)CLOUD.signIn();else if(confirm('Sign out? Your sales stay saved in the cloud.'))CLOUD.signOut()};
+
 /* ===== wiring ===== */
 const FIELDS=['bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
 function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
-FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);render()}}));
-$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);fillSettings();render();toast('Settings reset')};
-$('useSample').onclick=()=>{DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
+FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
+$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
+$('useSample').onclick=async()=>{
+  if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
+    try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
+  DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
 $('daySel').onchange=e=>{DAY=e.target.value;SCRUB=null;render()};
 $('mSched').onclick=()=>{if(MODE==='sched')return;MODE='sched';save('rf_mode',MODE);render()};
 $('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
@@ -1071,12 +1099,59 @@ $('csvFile').onchange=async e=>{
     const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
     const rows=base.filter(r=>!newDates.has(r[0])).concat(added);
     DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
+    if(USER)CLOUD.saveRows(added).catch(RF.error);
     toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total`);
   }
   $('msg').innerHTML=errs.map(m=>`<div class="err">${esc(m)}</div>`).join('');
   if(errs.length){$('msg').scrollIntoView({behavior:'smooth',block:'center'});if(!added.length)toast(errs.length>1?`${errs.length} files couldn't be read`:`Couldn't read that file`,true)}
 };
 fillSettings();render();
+</script>
+
+<script type="module">
+/* ===== Firebase: every uploaded day is saved under your Google account, so it follows you to any device.
+   Paste your web app config from Firebase console → Project settings → Your apps. Leave null to keep data on this device only. ===== */
+const FIREBASE_CONFIG=null;
+const SDK='https://www.gstatic.com/firebasejs/10.14.1/';
+const EMU=window.RF_EMULATOR; // set only by the local test harness
+const config=EMU?{apiKey:'demo-key',authDomain:'demo-rf.firebaseapp.com',projectId:'demo-rf'}:FIREBASE_CONFIG;
+if(config)try{
+  const [{initializeApp},A,F]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-firestore.js'].map(f=>import(SDK+f)));
+  const app=initializeApp(config),auth=A.getAuth(app);
+  // offline cache: uploads made with no signal queue up and send when it comes back
+  let db;try{db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(e){db=F.getFirestore(app)}
+  if(EMU){A.connectAuthEmulator(auth,`http://${EMU}:9099`,{disableWarnings:true});F.connectFirestoreEmulator(db,EMU,8080)}
+  const days=uid=>F.collection(db,'users',uid,'days');
+  async function writeDays(list){for(let i=0;i<list.length;i+=400){const b=F.writeBatch(db);
+    list.slice(i,i+400).forEach(d=>b.set(F.doc(days(auth.currentUser.uid),dayId(d.key)),{...d,updated:F.serverTimestamp()}));await b.commit()}}
+  let stop=[];
+  RF.ready({
+    async signIn(){const p=new A.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
+      try{await A.signInWithPopup(auth,p)}catch(e){
+        if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')return A.signInWithRedirect(auth,p);
+        if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')RF.error(e)}},
+    signOut:()=>A.signOut(auth),
+    saveRows:rows=>writeDays(rowsToDays(rows)),
+    saveSettings:s=>F.setDoc(F.doc(db,'users',auth.currentUser.uid),{settings:s},{merge:true}).catch(RF.error),
+    async deleteAll(){const snap=await F.getDocs(days(auth.currentUser.uid));
+      for(let i=0;i<snap.docs.length;i+=400){const b=F.writeBatch(db);snap.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}},
+    ...(EMU?{testSignIn:(email)=>A.signInWithCredential(auth,A.GoogleAuthProvider.credential(JSON.stringify({sub:email,email,name:'Test Manager',email_verified:true})))}:{})
+  });
+  A.onAuthStateChanged(auth,user=>{
+    stop.forEach(f=>f());stop=[];RF.auth(user);if(!user)return;
+    let synced=false;
+    stop.push(F.onSnapshot(days(user.uid),{includeMetadataChanges:true},snap=>{
+      RF.sync(snap.metadata.hasPendingWrites?'saving':snap.metadata.fromCache?'offline':'saved');
+      if(!synced&&!snap.metadata.fromCache){synced=true;
+        // first time on this device: push up any days it has that the cloud doesn't
+        const have=new Set(snap.docs.map(d=>d.data().key));
+        const mine=rowsToDays(RF.localRows()).filter(d=>!have.has(d.key));
+        if(mine.length){writeDays(mine).catch(RF.error);return}}
+      if(snap.docChanges().length)RF.cloudRows(daysToRows(snap.docs.map(d=>d.data())));
+    },RF.error));
+    stop.push(F.onSnapshot(F.doc(db,'users',user.uid),snap=>{const s=snap.data()?.settings;if(s&&!snap.metadata.hasPendingWrites)RF.cloudSettings(s)},RF.error));
+  });
+}catch(e){console.error('Cloud save is off:',e)}
 </script>
 
 </body></html>
