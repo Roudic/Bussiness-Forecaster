@@ -185,7 +185,20 @@ td .f,td .b{font-weight:700}
 .probe .ctx span{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--panel3);color:var(--muted);font-variant-numeric:tabular-nums}
 .probe .ctx .up{color:var(--ok)} .probe .ctx .down{color:var(--warn)}
 .probe .rtags{display:flex;flex-wrap:wrap;gap:6px}
-.probe .mbars{display:block;width:100%;height:70px}
+.probe .mbars{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:3px;align-items:end;height:112px;padding-top:4px}
+.probe .mb{position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:20px;cursor:pointer;min-width:0}
+.probe .mb.lab::after{content:"";position:absolute;left:50%;bottom:14px;width:1px;height:4px;background:var(--faint)}
+.probe .mbv{position:relative;display:block;border-radius:4px 4px 1px 1px;transform-origin:50% 100%;transition:filter .2s}
+.probe .mb:hover .mbv{filter:brightness(1.25)}
+.probe .mb.on .mbv{box-shadow:0 0 0 2px var(--fg)}
+.probe .mbv b{position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);font-family:var(--display);font-size:13px;color:var(--warn);white-space:nowrap}
+.probe .mbt{position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.probe .mb.on .mbt{color:var(--fg)}
+.probe .mb.gb .mbv{animation:grow .6s var(--ease) both;animation-delay:calc(var(--i)*14ms)}
+.probe .mb.gb{animation:none}
+.probe .mbinfo{font-size:14px;color:var(--muted);min-height:26px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-variant-numeric:tabular-nums}
+.probe .mbinfo b{color:var(--fg);font-family:var(--display);font-size:17px}
+.probe .mbinfo .zp{font-size:11px;padding:2px 8px}
 .probe .ph{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
 .probe .pt2{font-family:var(--display);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
 .probe .zp{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 10px;border-radius:999px;background:var(--panel3)}
@@ -958,12 +971,18 @@ function rangeStats(an,a,b){
 }
 function rangeHTML(an,a,b,grow){
   const s=rangeStats(an,a,b);if(!s)return '<p class="zd">No forecast sales in that stretch.</p>';
-  const lh=([x,y])=>x===y?x:`${x}–${y}`,n=s.R.length,W=600,H=70,bw=W/n,mx=Math.max(...s.R.map(r=>r.sales))||1;
-  const bars=s.R.map((r,i)=>{const h=r.sales/mx*(H-6);return `<rect class="${grow?'gb':''}" style="--i:${i}" x="${(i*bw+bw*.14).toFixed(1)}" y="${(H-h).toFixed(1)}" width="${Math.max(1,bw*.72).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${r===s.pk?'var(--warn)':r.level==='light'?'rgba(242,170,60,.5)':r.level?'var(--red)':'var(--faint)'}"><title>${fmt(r.min)} · ${money(r.sales)}</title></rect>`}).join('');
+  const lh=([x,y])=>x===y?x:`${x}–${y}`,n=s.R.length,mx=Math.max(...s.R.map(r=>r.sales))||1;
+  // label as many 15s as fit (about 36px each), always on a clean step so they read like a clock
+  const fit=Math.max(2,Math.floor((($('probe')?.clientWidth||$('railbox')?.clientWidth||600)-32)/36));
+  const every=[1,2,4,8,12,16].find(k=>Math.ceil(n/k)<=fit)||16,lab=r=>(r.min%(every*an.step))===0;
+  const bars=s.R.map((r,i)=>`<div class="mb ${grow?'gb':''} ${lab(r)?'lab':''}" data-i="${i}" style="--i:${i}" role="button" tabindex="-1" aria-label="${fmt(r.min)}, ${money(r.sales)}">
+      <span class="mbv" style="height:${Math.max(2,r.sales/mx*80).toFixed(1)}%;background:${r===s.pk?'var(--warn)':r.level==='light'?'rgba(242,170,60,.5)':r.level?'var(--red)':'var(--faint)'}">${r===s.pk?`<b>${money(r.sales)}</b>`:''}</span>
+      <span class="mbt">${lab(r)?fmtShort(r.min):''}</span></div>`).join('');
   const tags=[...s.rush.map(r=>`<span class="zp ${r.level==='light'?'meh':'bad'}">${r.name}</span>`),...s.brk.map(x=>`<span class="zp good">Break ${fmtShort(x.start)}–${fmtShort(x.end)}</span>`)].join('')||'<span class="zp">Steady stretch</span>';
   return `<div class="ph"><span class="pt2">${fmt(a)} – ${fmt(b)}</span><span class="note">${dur(b-a)} · ${n} fifteen${n>1?'s':''}</span></div>
     <div class="rtags">${tags}</div>
-    <svg class="mbars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Sales by 15 minutes in this stretch">${bars}</svg>
+    <div class="mbars" aria-label="Sales by 15 minutes in this stretch">${bars}</div>
+    <div class="mbinfo" id="mbinfo">Tap a bar to see that 15</div>
     <div class="pgrid rgrid">
       <div><span class="label">Sales</span><b>${money(s.tot)}</b><small>${(s.share*100).toFixed(0)}% of the day${s.high>s.low?` · usually ${money(s.low)}–${money(s.high)}`:''}</small></div>
       <div><span class="label">Busiest 15</span><b>${fmtShort(s.pk.min)}</b><small>${money(s.pk.sales)}</small></div>
@@ -1025,7 +1044,12 @@ function wireRail(an){
     const base=SCRUB??(RANGE?RANGE.a:(AHEAD?an.open:NOW));
     if(e.shiftKey){const a=RANGE?RANGE.a:base,end=RANGE?RANGE.b-st:base;setRange(an,a,end+d,true)}
     else setPoint(an,base+(SCRUB!=null||RANGE?d:0))};
-  pr.onclick=e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+  const barInfo=e=>{const mb=e.target.closest('.mb');if(!mb||!RANGE)return;const r=rangeStats(an,RANGE.a,RANGE.b)?.R[+mb.dataset.i];if(!r)return;
+    pr.querySelectorAll('.mb.on').forEach(x=>x.classList.remove('on'));mb.classList.add('on');
+    const z=zoneOf(an,r.min);$('mbinfo').innerHTML=`<b>${fmt(r.min)}</b> · ${money(r.sales)} · <span class="f">${r.foh} FOH</span> / <span class="b">${r.boh} BOH</span>${z.tag!=='Steady'?` · <span class="zp ${z.cls}">${z.tag}</span>`:''}`;
+    if(e.type==='click')buzz()};
+  pr.onpointerover=e=>{if(e.pointerType==='mouse')barInfo(e)};
+  pr.onclick=e=>{barInfo(e);const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
     if(a==='prev')setPoint(an,SCRUB-an.step);
     else if(a==='next')setPoint(an,SCRUB+an.step);
     else if(a==='close'){setPoint(an,null);el.focus()}
