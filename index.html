@@ -360,8 +360,26 @@ details.settings summary{cursor:pointer;font-family:var(--display);font-size:22p
 .form label span{font-weight:400;color:var(--muted);font-size:13px}
 .form input,.form select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px;font-variant-numeric:tabular-nums;width:100%}
 pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto;font-size:14px;color:var(--muted)}
+#dataChip{cursor:pointer}
+.dcf{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px;display:grid;gap:6px}
+.dcf b{font-family:var(--display);font-size:19px}
+.dcf .cols{display:flex;flex-wrap:wrap;gap:6px}
+.dcf .cols span{font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--panel3);color:var(--muted)}
+.dcf .cols span i{font-style:normal;color:var(--fg)}
+.dcf .cols span.miss i{color:var(--warn)}
+.dct td:nth-child(n+3),.dct th:nth-child(n+3){text-align:right}
+.dct td:last-child,.dct th:last-child{text-align:left;white-space:normal;min-width:220px}
+@media (max-width:640px){
+  .dct{min-width:0}.dct thead{display:none}.dct,.dct tbody,.dct tr{display:block}
+  .dct tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .dct td{display:grid;padding:0;border:0;text-align:left!important;white-space:normal;min-width:0!important}
+  .dct td::before{content:attr(data-l);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .dct td:first-child{grid-column:1/3} .dct td:last-child{grid-column:1/-1;display:block;margin-top:4px}
+  .dct td:last-child::before{content:none}}
+.flag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;margin:2px 4px 2px 0;background:var(--warnsoft);color:var(--warn)}
+.flag.bad{background:var(--redsoft);color:var(--redtext)} .flag.ok{background:var(--oksoft);color:var(--ok)}
 .err{background:var(--redsoft);border:1px solid var(--red);border-radius:14px;padding:12px 16px;font-weight:700;margin-top:14px}
-.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ok);color:#06140e;font-weight:700;padding:12px 22px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:rise .35s var(--ease) both;z-index:20}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ok);color:#06140e;font-weight:700;padding:12px 22px;border-radius:16px;max-width:calc(100% - 32px);width:max-content;text-align:center;line-height:1.35;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:rise .35s var(--ease) both;z-index:20}
 .toast.bad{background:var(--red);color:#fff}
 
 /* ---- motion ---- */
@@ -450,6 +468,10 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
 9/22/2026,6:30 AM,140.75,15</pre>
     </details>
   </details>
+  <details class="settings" id="dataCheck" style="margin-top:14px">
+    <summary>Data check</summary>
+    <div id="dcBody"></div>
+  </details>
 </div>
 
 <script>
@@ -458,7 +480,7 @@ function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function drop(k){try{localStorage.removeItem(k)}catch(e){}}
 
-const DEF={openAt:'06:00',closeAt:'22:00',bridge:60,minShift:4,maxShift:8,preOpen:30,postClose:30,win:70,method:'smart',plan:'typical',splh:70,rushSplh:90,boh:45,minFoh:3,minBoh:3,wage:14,adj:0,sens:1.35};
+const DEF={skipDays:[],openAt:'06:00',closeAt:'22:00',bridge:60,minShift:4,maxShift:8,preOpen:30,postClose:30,win:70,method:'smart',plan:'typical',splh:70,rushSplh:90,boh:45,minFoh:3,minBoh:3,wage:14,adj:0,sens:1.35};
 let S=Object.assign({},DEF,load('rf_settings')||{});Object.keys(DEF).forEach(k=>{if(S[k]==null)S[k]=DEF[k]});
 let DATA=load('rf_data2');
 let MODE=load('rf_mode')||'sched';
@@ -533,7 +555,8 @@ function parseCSV(text,fileName){
   if(hasHeader){
     ti=find(/time|interval|period|hour|start|slot/);
     di=head.findIndex(h=>/date|business|day/.test(h)&&!/daypart|part/.test(h));
-    si=find(/net.*sales|sales.*net/);if(si<0)si=find(/sales/);if(si<0)si=find(/net|gross|revenue|amount|total|\$/);
+    const QTY=/count|qty|quantity|units|number|#/;const findS=re=>head.findIndex(h=>re.test(h)&&!NOT.test(h)&&!QTY.test(h));
+    si=findS(/net.*sales|sales.*net/);if(si<0)si=findS(/sales/);if(si<0)si=findS(/net|gross|revenue|amount|total|\$/);
     xi=find(/trans|\bcount\b|orders|checks|guests|\btc\b|tickets/);
     if(si===ti||si===di)si=-1;
     if(xi===si||xi===ti||xi===di)xi=-1;
@@ -550,23 +573,35 @@ function parseCSV(text,fileName){
   if(si<0)throw new Error(`${fileName}: couldn't find a sales column. Name it "Sales" or "Net Sales".`);
   const out=[],pending=[];
   const fallback=parseDate(fileName)||{key:fileName,wd:null,dn:null};
+  let noTime=0,noSales=0,labelled=0;
+  const TOT=/^(grand\s*)?(sub)?totals?\b|\b(sub)?totals?$|^summary$/i;
   body.forEach(r=>{
-    const tstr=r[ti]||'';const t=parseTime(tstr);if(t==null)return;
-    const sales=money2num(r[si]);if(isNaN(sales))return;
+    const tstr=r[ti]||'';const t=parseTime(tstr);if(t==null){noTime++;return}
+    if(r.some((c,i)=>i!==si&&i!==xi&&TOT.test(c||'')))return void labelled++;
+    const sales=money2num(r[si]);if(isNaN(sales)){noSales++;return}
     const d=parseDate(di>=0?(r[di]||''):tstr)||parseDate(tstr)||fallback;
     const trans=xi>=0?money2num(r[xi]):NaN;
     const row=[d.key,d.wd,t,sales,isNaN(trans)?null:trans,d.dn];out.push(row);if(t&&t.noap)pending.push(row);
   });
   if(pending.length){const byDate={};pending.forEach(r=>(byDate[r[0]]=byDate[r[0]]||[]).push(r));
     Object.values(byDate).forEach(list=>{let prev=-1,add=0;list.forEach(r=>{let v=r[2].raw+add;if(prev>=0&&v<prev-60){add+=720;v+=720}r[2]=v;prev=v})})}
-  // a "total" line is one row that equals everything else that day added up; it isn't a 15-minute sale
-  const groups={};out.forEach(r=>(groups[r[0]]=groups[r[0]]||[]).push(r));
-  const totals=new Set();
-  Object.values(groups).forEach(list=>{if(list.length<5)return;const sum=list.reduce((a,r)=>a+r[3],0);
-    list.forEach(r=>{const rest=sum-r[3];if(rest>0&&Math.abs(r[3]-rest)<=rest*0.02)totals.add(r)})});
-  const kept=out.filter(r=>!totals.has(r));
+  // a "total" line is one row that equals everything else in its group added up; it isn't a sale.
+  // checked per 15 (channel rows + an interval total) and per day (a daily total stamped 12:00 AM)
+  const totals=new Set(),subs=new Set();
+  // only when it's the file's pattern (most groups have one), so a channel that happens to equal the others isn't dropped
+  const sweep=(keyOf,min,into,share)=>{const g={};out.forEach(r=>{if(!totals.has(r)&&!subs.has(r))(g[keyOf(r)]=g[keyOf(r)]||[]).push(r)});
+    const big=Object.values(g).filter(l=>l.length>=min),hits=[];
+    big.forEach(list=>{const sum=list.reduce((a,r)=>a+r[3],0);
+      const hit=list.find(r=>{const rest=sum-r[3];return rest>0&&Math.abs(r[3]-rest)<=Math.max(.01,rest*0.01)});if(hit)hits.push(hit)});
+    if(hits.length&&hits.length>=big.length*share)hits.forEach(h=>into.add(h))};
+  sweep(r=>r[0]+'|'+r[2],3,subs,.6);
+  sweep(r=>r[0],5,totals,0);
+  const kept=out.filter(r=>!totals.has(r)&&!subs.has(r));
   if(kept.length<4)throw new Error(`${fileName}: only ${kept.length} usable rows. Is this the 15-minute sales export?`);
-  kept.droppedTotals=totals.size;
+  const name=i=>i<0?null:hasHeader?rows[0][i]:`column ${i+1}`;
+  kept.droppedTotals=totals.size+subs.size+labelled;
+  kept.report={file:fileName,cols:{time:name(ti),date:name(di),sales:name(si),trans:name(xi)},lines:body.length,used:kept.length,
+    noTime,noSales,labelled,subtotals:subs.size,dayTotals:totals.size,days:new Set(kept.map(r=>r[0])).size,sales:kept.reduce((a,r)=>a+r[3],0),at:Date.now()};
   return kept;
 }
 
@@ -577,7 +612,8 @@ function storeHours(){let o=hm(S.openAt),c=hm(S.closeAt);if(o==null)o=0;if(c==nu
 const inHours=m=>{const [o,c]=storeHours();return m>=o&&m<c};
 function datesFor(day){
   const by=new Map();
-  DATA.rows.forEach(r=>{if(day!=='all'&&String(r[1])!==day)return;if(!inHours(r[2]))return;
+  const skip=new Set(S.skipDays||[]);
+  DATA.rows.forEach(r=>{if(day!=='all'&&String(r[1])!==day)return;if(!inHours(r[2])||skip.has(r[0]))return;
     let d=by.get(r[0]);if(!d){d={key:r[0],wd:r[1],dn:r[5],map:new Map()};by.set(r[0],d)}
     const o=d.map.get(r[2])||{s:0,t:null};o.s+=r[3];if(r[4]!=null)o.t=(o.t||0)+r[4];d.map.set(r[2],o)});
   return [...by.values()].filter(d=>[...d.map.values()].some(o=>o.s>0)).sort((a,b)=>(a.dn??0)-(b.dn??0));
@@ -780,7 +816,8 @@ function basisLine(ds){
   if(!ds.length)return '';
   const name=DAY==='all'?'days':WD[+DAY]+'s';
   const range=ds[0].dn!=null?` (${prettyDate(ds[0].key)} – ${prettyDate(ds[ds.length-1].key)})`:'';
-  const [ho,hc]=storeHours(),hrs=ho===0&&hc===1440?'':` · store hours ${fmtShort(ho)}–${fmtShort(hc)}`;
+  const [ho,hc]=storeHours(),nOff=(S.skipDays||[]).filter(k=>DATA.rows.some(r=>r[0]===k&&(DAY==='all'||String(r[1])===DAY))).length,
+    hrs=(ho===0&&hc===1440?'':` · store hours ${fmtShort(ho)}–${fmtShort(hc)}`)+(nOff?` · ${nOff} day${nOff>1?'s':''} left out`:'');
   return `Built from ${ds.length} ${ds.length===1?name.replace(/s$/,''):name}${range} · ${S.method==='smart'?'smart average':'straight average'} · planning for a ${S.plan} day${S.adj?` · ${S.adj>0?'+':''}${S.adj}% adjustment`:''}${hrs}`;
 }
 function weekStrip(){
@@ -1321,8 +1358,56 @@ function render(animate=true){
     app.querySelectorAll('.wd').forEach(b=>b.onclick=()=>{DAY=b.dataset.wd;render();window.scrollTo({top:0,behavior:'smooth'})});
   }
   if(animate)countUp(app);
+  if($('dataCheck').open)renderDataCheck();
   clearInterval(timer);clearInterval(tick);if(MODE==='floor'){startTick();if(LIVE)timer=setInterval(()=>{if(!EDITPOS)render(false)},60000)}
 }
+
+/* ===== data check: what the app actually read, to hold up against the POS daily report ===== */
+function dataCheckModel(){
+  const by={};DATA.rows.forEach(r=>{const d=by[r[0]]||(by[r[0]]={key:r[0],wd:r[1],dn:r[5],inS:0,outS:0,slots:new Map()});
+    if(inHours(r[2])){d.inS+=r[3];d.slots.set(r[2],(d.slots.get(r[2])||0)+r[3])}else d.outS+=r[3]});
+  const days=Object.values(by).sort((a,b)=>(b.dn??0)-(a.dn??0));
+  const med=a=>{const x=[...a].sort((p,q)=>p-q),n=x.length;return n?(n%2?x[(n-1)/2]:(x[n/2-1]+x[n/2])/2):0};
+  days.forEach(d=>{const mins=[...d.slots.entries()].filter(([,v])=>v>0).map(([m])=>m).sort((a,b)=>a-b);
+    d.first=mins[0];d.last=mins[mins.length-1];d.n=mins.length;
+    const step=15;d.gaps=d.n?Math.max(0,Math.round((d.last-d.first)/step)+1-d.n):0;
+    const same=days.filter(x=>x.wd===d.wd).map(x=>x.inS);d.vs=same.length>1&&med(same)>0?d.inS/med(same):null;
+    d.flags=[];
+    if(d.vs!=null&&d.vs<.6)d.flags.push(['bad',`${Math.round((1-d.vs)*100)}% below your other ${WD[d.wd]}s`]);
+    if(d.vs!=null&&d.vs>1.6)d.flags.push(['bad',`${Math.round((d.vs-1)*100)}% above your other ${WD[d.wd]}s`]);
+    if(d.gaps>3)d.flags.push(['',`${d.gaps} empty 15s inside the day`]);
+    if(d.outS)d.flags.push(['',`${money(d.outS)} outside store hours`]);
+    if(d.wd==null)d.flags.push(['bad','No date found, so no weekday']);
+  });
+  return {days,imp:load('rf_import')||[]};
+}
+function renderDataCheck(){
+  const box=$('dcBody');if(!box)return;
+  if(DATA.sample){box.innerHTML='<p class="note">You\'re on sample data. Upload your POS export and this shows exactly what the app read from it, day by day, so you can match it against your POS daily sales report.</p>';return}
+  const {days,imp}=dataCheckModel(),[o,c]=storeHours();
+  const col=(k,v)=>`<span class="${v?'':'miss'}">${k} ← <i>${v?esc(v):'not found'}</i></span>`;
+  const files=imp.length?`<p class="label" style="margin:0 0 8px">Last upload</p>`+imp.map(f=>f.error?`<div class="dcf"><b>${esc(f.file)}</b><span class="flag bad">${esc(f.error)}</span></div>`:
+    `<div class="dcf"><b>${esc(f.file)}</b><span class="note">Read ${f.used} of ${f.lines} lines · ${f.days} day${f.days>1?'s':''} · ${money(f.sales)} total</span>
+      <div class="cols">${col('Time',f.cols.time)}${col('Date',f.cols.date)}${col('Sales',f.cols.sales)}${col('Transactions',f.cols.trans)}</div>
+      <div>${[f.noTime&&`${f.noTime} line${f.noTime>1?'s':''} with no time`,f.noSales&&`${f.noSales} with no sales number`,f.labelled&&`${f.labelled} labelled total line${f.labelled>1?'s':''}`,f.subtotals&&`${f.subtotals} per-15 subtotal${f.subtotals>1?'s':''}`,f.dayTotals&&`${f.dayTotals} daily total${f.dayTotals>1?'s':''}`].filter(Boolean).map(x=>`<span class="flag">Skipped ${x}</span>`).join('')||'<span class="flag ok">Nothing skipped</span>'}</div></div>`).join(''):'';
+  const flagged=days.filter(d=>d.flags.length).length;
+  box.innerHTML=`<p class="note" style="margin-top:0">Hold the <b>Sales</b> column up against your POS daily sales report. Store hours ${fmtShort(o)}–${fmtShort(c)}${flagged?` · <b class="meh">${flagged} day${flagged>1?'s':''} worth a look</b>`:' · <b class="good">nothing looks off</b>'}.</p>
+    ${files}
+    <div class="tablewrap"><table class="dct"><thead><tr><th>Date</th><th>Day</th><th>Sales</th><th>Left out</th><th>15s</th><th>First – last sale</th><th>Check</th></tr></thead><tbody>
+    ${days.map(d=>{const off=(S.skipDays||[]).includes(d.key);return `<tr style="${off?'opacity:.5':''}"><td data-l="Date"><b>${esc(d.key)}</b></td><td data-l="Day">${d.wd!=null?WD[d.wd].slice(0,3):'?'}</td><td data-l="Sales">${money(d.inS)}</td><td data-l="Left out" class="rng">${d.outS?money(d.outS):'–'}</td><td data-l="15s">${d.n}</td><td data-l="Hours">${d.n?`${fmtShort(d.first)} – ${fmtShort(d.last+15)}`:'–'}</td><td data-l="">${off?'<span class="flag">Left out of the forecast</span>':d.flags.map(([k,t])=>`<span class="flag ${k}">${t}</span>`).join('')||'<span class="flag ok">Looks right</span>'} <button class="btn dcskip" type="button" data-key="${esc(d.key)}" style="min-height:34px;padding:4px 12px;font-size:13px">${off?'Use it':'Leave out'}</button></td></tr>`}).join('')}
+    </tbody></table></div>
+    <div class="controls" style="margin-top:12px;padding-bottom:16px"><button class="btn" id="dcCopy" type="button">Copy report</button><span class="note">Paste it to whoever's helping you check the numbers.</span></div>`;
+  $('dcCopy').onclick=()=>copyText(dataCheckText(),$('dcCopy'),'Data check copied');
+  box.querySelectorAll('.dcskip').forEach(b=>b.onclick=()=>{const k=b.dataset.key,list=new Set(S.skipDays||[]);
+    list.has(k)?list.delete(k):list.add(k);S.skipDays=[...list];save('rf_settings',S);USER&&CLOUD.saveSettings(S);render(false);renderDataCheck();
+    toast(list.has(k)?`${k} left out of the forecast`:`${k} is back in the forecast`)});
+}
+function dataCheckText(){const {days,imp}=dataCheckModel(),[o,c]=storeHours();
+  return ['RUSH FORECASTER DATA CHECK',`Store hours ${fmt(o)}–${fmt(c)}`,'',...imp.map(f=>f.error?`${f.file}: ERROR ${f.error}`:`${f.file}: read ${f.used}/${f.lines} lines, ${f.days} days, ${money(f.sales)} · time=${f.cols.time} date=${f.cols.date} sales=${f.cols.sales} trans=${f.cols.trans||'none'} · skipped: no time ${f.noTime}, no sales ${f.noSales}, total lines ${f.labelled}, subtotals ${f.subtotals}, daily totals ${f.dayTotals}`),'',
+    'DATE        DAY  SALES     LEFT OUT  15s  HOURS          CHECK',...days.map(d=>`${String(d.key).padEnd(11)} ${(d.wd!=null?WD[d.wd].slice(0,3):'?').padEnd(4)} ${money(d.inS).padEnd(9)} ${(d.outS?money(d.outS):'-').padEnd(9)} ${String(d.n).padEnd(4)} ${(d.n?`${fmtShort(d.first)}-${fmtShort(d.last+15)}`:'-').padEnd(14)} ${(S.skipDays||[]).includes(d.key)?'LEFT OUT':d.flags.map(f=>f[1]).join('; ')||'ok'}`)].join('\n')}
+$('dataChip').setAttribute('role','button');$('dataChip').tabIndex=0;$('dataChip').title='See what the app read from your files';
+$('dataChip').onclick=$('dataChip').onkeydown=e=>{if(e.type==='keydown'&&e.key!=='Enter'&&e.key!==' ')return;e.preventDefault?.();renderDataCheck();const d=$('dataCheck');d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'})};
+$('dataCheck').addEventListener('toggle',()=>{if($('dataCheck').open)renderDataCheck()});
 
 /* ===== cloud save: the Firebase module at the bottom fills in CLOUD once it's configured ===== */
 let CLOUD=null,USER=null;
@@ -1353,7 +1438,7 @@ $('cloudBtn').onclick=()=>{if(!CLOUD)return;if(!USER)CLOUD.signIn();else if(conf
 const FIELDS=['openAt','closeAt','bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
 function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
 FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'||e.target.type==='time'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
-$('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
+$('resetSettings').onclick=()=>{S=Object.assign({},DEF,{skipDays:S.skipDays||[]});save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
 $('useSample').onclick=async()=>{
   if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
     try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
@@ -1368,8 +1453,9 @@ function readFile(f){
 }
 $('csvFile').onchange=async e=>{
   const files=[...e.target.files];if(!files.length)return;
-  const errs=[];let added=[],totals=0;
-  for(const f of files){try{const r=parseCSV(await readFile(f),f.name.replace(/\.(csv|txt|tsv)$/i,''));totals+=r.droppedTotals||0;added=added.concat(r)}catch(err){errs.push(err.message)}}
+  const errs=[],reports=[];let added=[],totals=0;
+  for(const f of files){try{const r=parseCSV(await readFile(f),f.name.replace(/\.(csv|txt|tsv)$/i,''));totals+=r.droppedTotals||0;reports.push(r.report);added=added.concat(r)}catch(err){errs.push(err.message);reports.push({file:f.name,error:err.message,at:Date.now()})}}
+  save('rf_import',reports);
   e.target.value='';
   if(added.length){
     const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
@@ -1377,7 +1463,7 @@ $('csvFile').onchange=async e=>{
     DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
     if(USER)CLOUD.saveRows(added).catch(RF.error);
     const out=added.filter(r=>!inHours(r[2])&&r[3]),outSum=out.reduce((a,r)=>a+r[3],0),[o,c]=storeHours();
-    const notes=[outSum?`${money(outSum)} stamped outside ${fmtShort(o)}–${fmtShort(c)} left out`:'',totals?`${totals} daily-total line${totals>1?'s':''} skipped`:''].filter(Boolean);
+    const notes=[outSum?`${money(outSum)} stamped outside ${fmtShort(o)}–${fmtShort(c)} left out`:'',totals?`${totals} total line${totals>1?'s':''} skipped`:''].filter(Boolean);
     toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total${notes.length?' · '+notes.join(' · '):''}`);
   }
   $('msg').innerHTML=errs.map(m=>`<div class="err">${esc(m)}</div>`).join('');
