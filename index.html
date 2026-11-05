@@ -429,6 +429,8 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
       <label for="s_maxShift">Longest shift (hrs)<span>Longer coverage gets split into two shifts</span><input id="s_maxShift" type="number" min="4" max="12" step="0.5"></label>
       <label for="s_bridge">Keep crew through dips (min)<span>If the need comes back within this long, nobody gets cut</span><input id="s_bridge" type="number" min="0" max="180" step="15"></label>
       <label for="s_preOpen">Opening crew in early (min)<span>Before the first sale. Opening centerline.</span><input id="s_preOpen" type="number" min="0" max="120" step="15"></label>
+      <label for="s_openAt">Store opens<span>Sales stamped before this are left out of the forecast</span><input id="s_openAt" type="time" step="900"></label>
+      <label for="s_closeAt">Store closes<span>Late refunds, voids and overnight adjustments after this are left out</span><input id="s_closeAt" type="time" step="900"></label>
       <label for="s_postClose">Closing crew stays (min)<span>After the last sale, for close-down</span><input id="s_postClose" type="number" min="0" max="120" step="15"></label>
       <label for="s_wage">Average wage ($/hr)<span>Used for the labor % estimate</span><input id="s_wage" type="number" min="7" step="0.25"></label>
       <label for="s_adj">Sales adjustment (%)<span>+10 for a promo day, −15 for bad weather</span><input id="s_adj" type="number" step="1"></label>
@@ -456,7 +458,7 @@ function load(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null
 function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function drop(k){try{localStorage.removeItem(k)}catch(e){}}
 
-const DEF={bridge:60,minShift:4,maxShift:8,preOpen:30,postClose:30,win:70,method:'smart',plan:'typical',splh:70,rushSplh:90,boh:45,minFoh:3,minBoh:3,wage:14,adj:0,sens:1.35};
+const DEF={openAt:'06:00',closeAt:'22:00',bridge:60,minShift:4,maxShift:8,preOpen:30,postClose:30,win:70,method:'smart',plan:'typical',splh:70,rushSplh:90,boh:45,minFoh:3,minBoh:3,wage:14,adj:0,sens:1.35};
 let S=Object.assign({},DEF,load('rf_settings')||{});Object.keys(DEF).forEach(k=>{if(S[k]==null)S[k]=DEF[k]});
 let DATA=load('rf_data2');
 let MODE=load('rf_mode')||'sched';
@@ -557,14 +559,25 @@ function parseCSV(text,fileName){
   });
   if(pending.length){const byDate={};pending.forEach(r=>(byDate[r[0]]=byDate[r[0]]||[]).push(r));
     Object.values(byDate).forEach(list=>{let prev=-1,add=0;list.forEach(r=>{let v=r[2].raw+add;if(prev>=0&&v<prev-60){add+=720;v+=720}r[2]=v;prev=v})})}
-  if(out.length<4)throw new Error(`${fileName}: only ${out.length} usable rows. Is this the 15-minute sales export?`);
-  return out;
+  // a "total" line is one row that equals everything else that day added up; it isn't a 15-minute sale
+  const groups={};out.forEach(r=>(groups[r[0]]=groups[r[0]]||[]).push(r));
+  const totals=new Set();
+  Object.values(groups).forEach(list=>{if(list.length<5)return;const sum=list.reduce((a,r)=>a+r[3],0);
+    list.forEach(r=>{const rest=sum-r[3];if(rest>0&&Math.abs(r[3]-rest)<=rest*0.02)totals.add(r)})});
+  const kept=out.filter(r=>!totals.has(r));
+  if(kept.length<4)throw new Error(`${fileName}: only ${kept.length} usable rows. Is this the 15-minute sales export?`);
+  kept.droppedTotals=totals.size;
+  return kept;
 }
 
 /* ===== forecast engine: every day in the file ===== */
+// store hours: anything stamped outside them (overnight adjustments, late refunds) stays in the data but out of the forecast
+const hm=v=>{const m=/^(\d{1,2}):(\d{2})/.exec(v||'');return m?+m[1]*60+ +m[2]:null};
+function storeHours(){let o=hm(S.openAt),c=hm(S.closeAt);if(o==null)o=0;if(c==null||c===0)c=1440;return c>o?[o,c]:[0,1440]}
+const inHours=m=>{const [o,c]=storeHours();return m>=o&&m<c};
 function datesFor(day){
   const by=new Map();
-  DATA.rows.forEach(r=>{if(day!=='all'&&String(r[1])!==day)return;
+  DATA.rows.forEach(r=>{if(day!=='all'&&String(r[1])!==day)return;if(!inHours(r[2]))return;
     let d=by.get(r[0]);if(!d){d={key:r[0],wd:r[1],dn:r[5],map:new Map()};by.set(r[0],d)}
     const o=d.map.get(r[2])||{s:0,t:null};o.s+=r[3];if(r[4]!=null)o.t=(o.t||0)+r[4];d.map.set(r[2],o)});
   return [...by.values()].filter(d=>[...d.map.values()].some(o=>o.s>0)).sort((a,b)=>(a.dn??0)-(b.dn??0));
@@ -767,7 +780,8 @@ function basisLine(ds){
   if(!ds.length)return '';
   const name=DAY==='all'?'days':WD[+DAY]+'s';
   const range=ds[0].dn!=null?` (${prettyDate(ds[0].key)} – ${prettyDate(ds[ds.length-1].key)})`:'';
-  return `Built from ${ds.length} ${ds.length===1?name.replace(/s$/,''):name}${range} · ${S.method==='smart'?'smart average':'straight average'} · planning for a ${S.plan} day${S.adj?` · ${S.adj>0?'+':''}${S.adj}% adjustment`:''}`;
+  const [ho,hc]=storeHours(),hrs=ho===0&&hc===1440?'':` · store hours ${fmtShort(ho)}–${fmtShort(hc)}`;
+  return `Built from ${ds.length} ${ds.length===1?name.replace(/s$/,''):name}${range} · ${S.method==='smart'?'smart average':'straight average'} · planning for a ${S.plan} day${S.adj?` · ${S.adj>0?'+':''}${S.adj}% adjustment`:''}${hrs}`;
 }
 function weekStrip(){
   const wds=[...new Set(DATA.rows.map(r=>r[1]).filter(v=>v!=null))].sort((a,b)=>a-b);
@@ -918,7 +932,8 @@ function floorState(an,now){
   else if(next&&next.level!=='light'&&next.start-now<=45){cls='coming';tag='Rush coming';head=`${next.name} in ${dur(next.start-now)}`;sub=`Starts ${fmt(next.start)} and runs about ${dur(next.end-next.start)} to ${fmt(next.end)}. Finish stock-up and pull breaks back now.`}
   else if(next){cls='steady';tag='Steady';head=`Next: ${next.name.toLowerCase()} at ${fmt(next.start)}`;sub=`${dur(next.start-now)} away. Runs about ${dur(next.end-next.start)}. ${brNow?'Good time for breaks.':'Use the quiet time to stock and clean.'}`}
   else{cls='steady';tag='Winding down';head='No more rushes today';sub='Run the closing plan. Cut to minimums as the counts drop.'}
-  return {ci,cur,next,target,nextPeak,nowRow,brNow,brNext,cls,tag,head,sub};
+  const closedNow=now<an.open||now>=an.close;
+  return {ci,cur,next,target,nextPeak,nowRow,brNow,brNext,cls,tag,head,sub,closedNow};
 }
 function stationsHTML(d,cls,color){
   return Object.entries(d.counts).map(([k,v],i)=>`<div class="st ${v?'':'zero'}"><span>${esc(k)}</span><span class="n ${cls}">${v}</span><span class="cap"><i style="--d:${i};width:${v/d.cap[k]*100}%;background:${color}"></i></span></div>`).join('')
@@ -1131,6 +1146,9 @@ function renderFloor(an){
     ${A?`<section class="card rv" style="--d:2"><h2>Crew through the day <small>${an.laborHrs.toFixed(1)} labor hrs</small></h2>
       <div class="crew"><div><span class="label">Open · ${fmtShort(first.min)}</span><span class="mid">${fb(first)}</span></div><div><span class="label">Peak · ${fmtShort(peakRow.min)}</span><span class="mid">${fb(peakRow)}</span></div><div><span class="label">Close · ${fmtShort(last.min)}</span><span class="mid">${fb(last)}</span></div></div>
       <p class="callout">${an.bestBreak?`Best break window: <b>${fmt(an.bestBreak.start)} – ${fmt(an.bestBreak.end)}</b>, send ${an.bestBreak.send} at a time.`:'No clear break window. Rotate breaks in the slowest 15s.'}</p>
+    </section>`:st.closedNow?`<section class="card rv" style="--d:2"><h2>On the clock now <small>Store's closed</small></h2>
+      <div class="crew"><div><span class="label">FOH</span><span class="big f">0</span></div><div><span class="label">BOH</span><span class="big b">0</span></div><div><span class="label">Total</span><span class="big">0</span></div></div>
+      <p class="callout">${now<an.open?`Opens at <b>${fmt(an.open)}</b>. Openers in at ${fmt(an.open-S.preOpen)} with <b class="f">${an.L[0].foh} FOH</b> / <b class="b">${an.L[0].boh} BOH</b>.`:`Closed at ${fmt(an.close)}. Switch to <b>Look ahead</b> to plan tomorrow.`}</p>
     </section>`:`<section class="card rv" style="--d:2"><h2>On the clock now <small>${fmt(st.nowRow.min)} forecast ${money(st.nowRow.sales)}</small></h2>
       <div class="crew"><div><span class="label">FOH</span><span class="big f">${cu(st.nowRow.foh,'int')}</span></div><div><span class="label">BOH</span><span class="big b">${cu(st.nowRow.boh,'int')}</span></div><div><span class="label">Total</span><span class="big">${cu(st.nowRow.crew,'int')}</span></div></div>
       <p class="callout">${brText}</p>
@@ -1192,7 +1210,7 @@ function huddleText(an){
   const st=floorState(an,NOW),t=st.target;
   const lu=t?lineup(t.peakFoh,t.peakBoh,t.peakMin):lineup(st.nowRow.foh,st.nowRow.boh,st.nowRow.min);
   const list=d=>Object.entries(d.counts).filter(([,v])=>v).map(([k,v])=>`${k} ${v}`).join(', ');
-  const L=[`HUEYTOWN HUDDLE · ${DAY==='all'?'':WD[+DAY]+' '}${fmt(NOW)}`,`${st.tag.toUpperCase()}: ${st.head}`,st.sub,'',`On the clock now: ${st.nowRow.foh} FOH / ${st.nowRow.boh} BOH`];
+  const L=[`HUEYTOWN HUDDLE · ${DAY==='all'?'':WD[+DAY]+' '}${fmt(NOW)}`,`${st.tag.toUpperCase()}: ${st.head}`,st.sub,'',st.closedNow?`Store's closed. Opens ${fmt(an.open)}.`:`On the clock now: ${st.nowRow.foh} FOH / ${st.nowRow.boh} BOH`];
   if(t){L.push(`${t.name}: ${fmt(t.start)}–${fmt(t.end)} (${dur(t.end-t.start)}), peak ${fmt(t.peakMin)}`,`Crew for the peak: ${t.peakFoh} FOH / ${t.peakBoh} BOH. On position by ${fmt(t.start-15)}.`,`Stock-up starts ${fmt(Math.max(an.open,t.start-45))}. Reset at ${fmt(t.end)}.`)}
   L.push('','PEAKS TODAY',...an.peaks.map(p=>p.none?`${p.dp}: busiest 15 at ${fmt(p.peakMin)} (${p.why.toLowerCase()})`:`${p.dp}: peak ${fmt(p.peakMin)} · window ${fmt(p.start)}–${fmt(p.end)} · ${p.peakFoh} FOH / ${p.peakBoh} BOH${NOW>=p.end?' (done)':''}`));
   L.push('',`BOH: ${list(lu.boh)}`,`FOH: ${list(lu.foh)}`);
@@ -1240,7 +1258,7 @@ function renderTV(an){
     <section class="tvp tvs"><div><span class="tag"><span class="dot"></span>${st.tag}</span><h2>${st.head}</h2><p>${st.sub}</p></div>
       ${c?`<div class="tvcd"><span class="label">${c.l}</span><span class="num" data-t="${c.t}">${cdText(c.t)}</span></div>`:''}</section>
     <section class="tvp tvcrew">
-      <div><span class="label">On the clock now</span><div class="tvnums now"><span class="f">${st.nowRow.foh}<small>FOH</small></span><span class="b">${st.nowRow.boh}<small>BOH</small></span></div></div>
+      <div><span class="label">On the clock now</span><div class="tvnums now"><span class="f">${st.closedNow?0:st.nowRow.foh}<small>FOH</small></span><span class="b">${st.closedNow?0:st.nowRow.boh}<small>BOH</small></span></div></div>
       <div><span class="label">${t?`For the ${t.dp.toLowerCase()} peak · ${fmt(t.peakMin)}`:'Rest of day'}</span><div class="tvnums"><span class="f">${t?t.peakFoh:st.nowRow.foh}<small>FOH</small></span><span class="b">${t?t.peakBoh:st.nowRow.boh}<small>BOH</small></span></div></div>
     </section>
     <section class="tvp tvpos"><span class="label">Positions ${t?`for the ${t.dp.toLowerCase()} peak`:'right now'}</span>
@@ -1332,9 +1350,9 @@ window.RF={
 $('cloudBtn').onclick=()=>{if(!CLOUD)return;if(!USER)CLOUD.signIn();else if(confirm('Sign out? Your sales stay saved in the cloud.'))CLOUD.signOut()};
 
 /* ===== wiring ===== */
-const FIELDS=['bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
+const FIELDS=['openAt','closeAt','bridge','minShift','maxShift','preOpen','postClose','win','method','plan','splh','rushSplh','boh','minFoh','minBoh','wage','adj','sens'];
 function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
-FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
+FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'||e.target.type==='time'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
 $('resetSettings').onclick=()=>{S=Object.assign({},DEF);save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
 $('useSample').onclick=async()=>{
   if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
@@ -1350,15 +1368,17 @@ function readFile(f){
 }
 $('csvFile').onchange=async e=>{
   const files=[...e.target.files];if(!files.length)return;
-  const errs=[];let added=[];
-  for(const f of files){try{added=added.concat(parseCSV(await readFile(f),f.name.replace(/\.(csv|txt|tsv)$/i,'')))}catch(err){errs.push(err.message)}}
+  const errs=[];let added=[],totals=0;
+  for(const f of files){try{const r=parseCSV(await readFile(f),f.name.replace(/\.(csv|txt|tsv)$/i,''));totals+=r.droppedTotals||0;added=added.concat(r)}catch(err){errs.push(err.message)}}
   e.target.value='';
   if(added.length){
     const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
     const rows=base.filter(r=>!newDates.has(r[0])).concat(added);
     DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
     if(USER)CLOUD.saveRows(added).catch(RF.error);
-    toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total`);
+    const out=added.filter(r=>!inHours(r[2])&&r[3]),outSum=out.reduce((a,r)=>a+r[3],0),[o,c]=storeHours();
+    const notes=[outSum?`${money(outSum)} stamped outside ${fmtShort(o)}–${fmtShort(c)} left out`:'',totals?`${totals} daily-total line${totals>1?'s':''} skipped`:''].filter(Boolean);
+    toast(`Added ${newDates.size} day${newDates.size>1?'s':''} · ${new Set(rows.map(r=>r[0])).size} total${notes.length?' · '+notes.join(' · '):''}`);
   }
   $('msg').innerHTML=errs.map(m=>`<div class="err">${esc(m)}</div>`).join('');
   if(errs.length){$('msg').scrollIntoView({behavior:'smooth',block:'center'});if(!added.length)toast(errs.length>1?`${errs.length} files couldn't be read`:`Couldn't read that file`,true)}
