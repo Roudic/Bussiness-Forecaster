@@ -457,7 +457,7 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
     </div>
     <div class="controls" style="padding-bottom:16px">
       <button class="btn" id="resetSettings" type="button">Reset settings</button>
-      <button class="btn" id="useSample" type="button">Clear my data, use sample</button>
+      <button class="btn" id="useSample" type="button">Clear my data</button>
     </div>
     <details style="padding-bottom:16px">
       <summary class="label" style="cursor:pointer;padding:6px 0">What CSV works?</summary>
@@ -510,7 +510,9 @@ function makeSample(){
   }
   return {name:'Sample',sample:true,rows};
 }
-if(!DATA) DATA=makeSample();
+const EMPTY=()=>({name:'',sample:false,rows:[]});
+if(/[?&]demo\b/.test(location.search)||(!DATA&&load('rf_usesample')))DATA=makeSample();
+if(!DATA)DATA=EMPTY();
 
 /* ===== CSV parsing ===== */
 function splitCSV(line,sep=','){
@@ -1324,10 +1326,27 @@ function dayOptions(){
   if(!keys.length)return [{v:'all',label:'All uploaded days'}];
   return [{v:'all',label:'All days (average)'},...keys.map(k=>({v:String(k),label:`${WD[k]} · ${wds[k].size} day${wds[k].size>1?'s':''}`}))];
 }
+function emptyState(){
+  return `<section class="card rv" style="--d:0;padding:28px 24px;display:grid;gap:14px;justify-items:start">
+    <h2 style="font-size:clamp(30px,5vw,46px);margin:0">Upload your sales to get started</h2>
+    <p class="note" style="font-size:17px;margin:0;max-width:62ch">Export the 15-minute sales report from your POS as a CSV and upload it. Four or more of each weekday gives the best forecast. Everything stays on this device${CLOUD?' unless you sign in to save it to the cloud':''}.</p>
+    <ol class="note" style="margin:0;padding-left:20px;font-size:16px;display:grid;gap:4px"><li>Pull the sales-by-15-minutes report for the last 4–6 weeks</li><li>Save or export it as <b>CSV</b> (not Excel)</li><li>Tap <b>Upload CSVs</b> and pick the file. You can pick several at once</li></ol>
+    <div class="controls"><button class="btn primary" type="button" id="emptyUpload">Upload CSVs</button><button class="btn" type="button" id="trySample">Try it with sample data</button></div>
+  </section>`;
+}
 function render(animate=true){
   const chip=$('dataChip'),nd=new Set(DATA.rows.map(r=>r[0])).size;
   if(DATA.sample){chip.className='chip sample';chip.textContent=`Sample data · ${nd} days`}
+  else if(!nd){chip.className='chip';chip.textContent='No data yet'}
   else{chip.className='chip file';chip.textContent=`${nd} day${nd>1?'s':''} loaded`}
+  $('useSample').textContent=DATA.sample?'Turn off sample data':'Clear my data';
+  if(!DATA.rows.length){
+    document.body.classList.remove('tvmode');TV=false;clearInterval(timer);clearInterval(tick);
+    $('daySel').innerHTML='<option value="all">No days yet</option>';$('seg').dataset.mode=MODE;
+    $('mSched').setAttribute('aria-pressed',MODE==='sched');$('mFloor').setAttribute('aria-pressed',MODE==='floor');
+    $('app').innerHTML=emptyState();$('emptyUpload').onclick=()=>$('csvFile').click();
+    $('trySample').onclick=()=>{DATA=makeSample();save('rf_usesample',1);DAY=null;render();toast('Sample data. Upload your own any time; it won\'t mix in.')};
+    if($('dataCheck').open)renderDataCheck();return}
   const opts=dayOptions();
   if(DAY==null||!opts.some(o=>o.v===DAY)){const today=String(new Date().getDay());DAY=opts.some(o=>o.v===today)?today:opts[0].v}
   $('daySel').innerHTML=opts.map(o=>`<option value="${o.v}" ${o.v===DAY?'selected':''}>${o.label}</option>`).join('');
@@ -1383,6 +1402,7 @@ function dataCheckModel(){
 }
 function renderDataCheck(){
   const box=$('dcBody');if(!box)return;
+  if(!DATA.rows.length){box.innerHTML='<p class="note">No data yet. Upload your POS export and this shows exactly what the app read from it, day by day.</p>';return}
   if(DATA.sample){box.innerHTML='<p class="note">You\'re on sample data. Upload your POS export and this shows exactly what the app read from it, day by day, so you can match it against your POS daily sales report.</p>';return}
   const {days,imp}=dataCheckModel(),[o,c]=storeHours();
   const col=(k,v)=>`<span class="${v?'':'miss'}">${k} ← <i>${v?esc(v):'not found'}</i></span>`;
@@ -1421,7 +1441,7 @@ window.RF={
   ready(api){CLOUD=api;$('cloudBtn').hidden=false},
   auth(user){USER=user;const b=$('cloudBtn');
     // a different person signing in on a shared iPad starts from their own cloud data, not the last person's
-    if(user){const owner=load('rf_owner');if(owner&&owner!==user.uid&&!DATA.sample){DATA=makeSample();drop('rf_data2');DAY=null;render(false)}save('rf_owner',user.uid)}
+    if(user){const owner=load('rf_owner');if(owner&&owner!==user.uid&&!DATA.sample){DATA=EMPTY();drop('rf_data2');DAY=null;render(false)}save('rf_owner',user.uid)}
     b.textContent=user?`${(user.displayName||user.email||'Signed in').split(' ')[0]} · Sign out`:'Sign in to save';
     b.classList.toggle('primary',!user);syncChip('saving')},
   localRows(){return DATA.sample?[]:DATA.rows},
@@ -1440,9 +1460,11 @@ function fillSettings(){FIELDS.forEach(k=>$('s_'+k).value=S[k])}
 FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.value;const v=e.target.tagName==='SELECT'||e.target.type==='time'?raw:parseFloat(raw);if(v!==''&&!(typeof v==='number'&&isNaN(v))){S[k]=v;save('rf_settings',S);USER&&CLOUD.saveSettings(S);render()}}));
 $('resetSettings').onclick=()=>{S=Object.assign({},DEF,{skipDays:S.skipDays||[]});save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
 $('useSample').onclick=async()=>{
+  if(DATA.sample){drop('rf_usesample');DATA=load('rf_data2')||EMPTY();DAY=null;render();toast(DATA.rows.length?'Sample data off. Back to your data.':'Sample data cleared');return}
   if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
     try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
-  DATA=makeSample();drop('rf_data2');DAY=null;$('msg').innerHTML='';render();toast('Back on sample data')};
+  else if(DATA.rows.length&&!confirm('Clear all the sales you uploaded on this device? You can upload them again any time.'))return;
+  DATA=EMPTY();drop('rf_data2');drop('rf_usesample');DAY=null;$('msg').innerHTML='';render();toast('Your data is cleared')};
 $('daySel').onchange=e=>{DAY=e.target.value;SCRUB=RANGE=null;render()};
 $('mSched').onclick=()=>{if(MODE==='sched')return;EDITPOS=false;MODE='sched';save('rf_mode',MODE);render()};
 $('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
@@ -1458,7 +1480,7 @@ $('csvFile').onchange=async e=>{
   save('rf_import',reports);
   e.target.value='';
   if(added.length){
-    const base=DATA.sample?[]:DATA.rows;const newDates=new Set(added.map(r=>r[0]));
+    const base=DATA.sample?(load('rf_data2')?.rows||[]):DATA.rows;drop('rf_usesample');const newDates=new Set(added.map(r=>r[0]));
     const rows=base.filter(r=>!newDates.has(r[0])).concat(added);
     DATA={name:'',sample:false,rows};save('rf_data2',DATA);DAY=null;render();
     if(USER)CLOUD.saveRows(added).catch(RF.error);
