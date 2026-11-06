@@ -1497,7 +1497,14 @@ fillSettings();render();
 <script type="module">
 /* ===== Firebase: every uploaded day is saved under your Google account, so it follows you to any device.
    Paste your web app config from Firebase console → Project settings → Your apps. Leave null to keep data on this device only. ===== */
-const FIREBASE_CONFIG=null;
+const FIREBASE_CONFIG={
+  apiKey:'AIzaSyBem73xrhCn_ZkVypZX7TUYSQMVlqmNb4k',
+  authDomain:'rush-forecaster.firebaseapp.com',
+  projectId:'rush-forecaster',
+  storageBucket:'rush-forecaster.firebasestorage.app',
+  messagingSenderId:'974403543504',
+  appId:'1:974403543504:web:86dc9fdeeae9f4e85399d5'
+};
 const SDK='https://www.gstatic.com/firebasejs/10.14.1/';
 const EMU=window.RF_EMULATOR; // set only by the local test harness
 const config=EMU?{apiKey:'demo-key',authDomain:'demo-rf.firebaseapp.com',projectId:'demo-rf'}:FIREBASE_CONFIG;
