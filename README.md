@@ -14,11 +14,10 @@ Live: https://roudic.github.io/Bussiness-Forecaster/
 `.github/workflows/pages.yml` publishes `index.html` to GitHub Pages on every push to `main`.
 One-time setup: repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
-## Cloud save (Firebase)
+## Cloud save and store teams (Firebase)
 
-1. Create a project at https://console.firebase.google.com and add a **Web app**. Copy its config object.
-2. Paste it into `const FIREBASE_CONFIG=null;` near the bottom of `index.html`.
-3. **Authentication → Sign-in method:** enable **Google**. **Authentication → Settings → Authorized domains:** add `roudic.github.io`.
-4. **Firestore Database:** create it (production mode), then paste `firestore.rules` into the **Rules** tab and publish.
+Project: `rush-forecaster`. Sign in with Google to save. The first person with data becomes the store **owner**; in **Store team** they add people by Gmail address as **Manager** (upload, edit positions and settings) or **View only** (kitchen tablet). Removing someone cuts access immediately.
 
-Data lives at `users/{uid}/days/{day}` (one doc per business day) and `users/{uid}` (settings). The web config is public by design; the rules are what keep each account's sales private.
+Data: `stores/{id}` (name, ownerUid, managers[], viewers[]), `stores/{id}/days/{day}`, `stores/{id}/meta/config` (settings, positions). Each person's pre-team data in `users/{uid}` is moved into their store on first sign-in.
+
+`firestore.rules` enforces all of it (team-only reads, owner/manager writes, owner-only deletes and team changes). Paste it into Firebase console → Firestore Database → Rules → Publish. Until the team rules are published the app falls back to each account's own `users/{uid}` space.
