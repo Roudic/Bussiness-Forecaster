@@ -361,6 +361,15 @@ details.settings summary{cursor:pointer;font-family:var(--display);font-size:22p
 .form input,.form select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px;font-variant-numeric:tabular-nums;width:100%}
 pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto;font-size:14px;color:var(--muted)}
 #dataChip{cursor:pointer}
+.tm{display:grid;gap:8px;margin-bottom:14px}
+.tmr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.tmr .em{font-weight:700;margin-right:auto;word-break:break-all}
+.tmr select{min-height:40px;padding:6px 10px}
+.tmr .btn{min-height:40px;padding:6px 12px}
+.role{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 10px;border-radius:999px;background:var(--panel3);color:var(--muted)}
+.role.owner{background:var(--redsoft);color:var(--redtext)} .role.manager{background:var(--fohsoft);color:var(--foh)} .role.viewer{background:var(--oksoft);color:var(--ok)}
+.tadd{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 14px}
+.tadd input{flex:1 1 220px;min-height:48px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .dcf{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px;display:grid;gap:6px}
 .dcf b{font-family:var(--display);font-size:19px}
 .dcf .cols{display:flex;flex-wrap:wrap;gap:6px}
@@ -413,7 +422,7 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
       <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M12 2.5v3.5M18.5 7l1.6-1.6"/></svg></div>
       <div style="min-width:0">
         <h1>Rush Forecaster</h1>
-        <div class="sub">Hueytown #06123 <span class="chip" id="dataChip">Sample data</span> <span class="chip" id="syncChip" hidden></span></div>
+        <div class="sub"><span id="storeName">Hueytown #06123</span> <span class="chip" id="dataChip">Sample data</span> <span class="chip" id="syncChip" hidden></span></div>
       </div>
     </div>
     <div class="controls">
@@ -467,6 +476,10 @@ pre.fmt{background:var(--panel2);border-radius:10px;padding:12px;overflow-x:auto
 9/22/2026,6:15 AM,112.20,12
 9/22/2026,6:30 AM,140.75,15</pre>
     </details>
+  </details>
+  <details class="settings" id="teamBox" style="margin-top:14px" hidden>
+    <summary>Store team</summary>
+    <div id="teamBody"></div>
   </details>
   <details class="settings" id="dataCheck" style="margin-top:14px">
     <summary>Data check</summary>
@@ -1202,7 +1215,7 @@ function renderFloor(an){
       <div><h3 class="b">BOH · ${t?t.peakBoh:st.nowRow.boh}</h3><div class="stations">${stationsHTML(lu.boh,'b','var(--red)')}</div></div>
       <div><h3 class="f">FOH · ${t?t.peakFoh:st.nowRow.foh}</h3><div class="stations">${stationsHTML(lu.foh,'f','var(--foh)')}</div></div>
     </div>
-    <div class="controls" style="margin-top:14px"><button class="btn" id="editPos" type="button">Edit positions</button>${posCustom()?'<span class="note">Using your store\'s positions</span>':''}</div>`}
+    <div class="controls" style="margin-top:14px">${canEditUI()?'<button class="btn" id="editPos" type="button">Edit positions</button>':'<span class="note">View only</span>'}${posCustom()?'<span class="note">Using your store\'s positions</span>':''}</div>`}
   </section>
   <section class="card rv" style="--d:5"><h2>${A?'Full day plan':'Game plan'} <small>${A?`Open ${fmt(an.open)} to close`:`From ${fmt(now)} to close`}</small></h2>
     <ol class="plan">${ev.length?ev.map((e,i)=>`<li class="${e.k} ${!A&&e.t+an.step<=now?'past':''} ${i===nextIdx?'next':''}"><span class="t">${fmt(e.t)}</span><div><div class="what">${e.w}</div><div class="det">${e.d}</div>${e.list?`<ul>${e.list.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}</div></li>`).join(''):'<li><span class="t">—</span><div class="what">Nothing left on the plan today.</div></li>'}</ol>
@@ -1327,6 +1340,8 @@ function dayOptions(){
   return [{v:'all',label:'All days (average)'},...keys.map(k=>({v:String(k),label:`${WD[k]} · ${wds[k].size} day${wds[k].size>1?'s':''}`}))];
 }
 function emptyState(){
+  if(!canEditUI())return `<section class="card rv" style="--d:0;padding:28px 24px;display:grid;gap:10px"><h2 style="font-size:clamp(28px,5vw,42px);margin:0">No sales in ${esc(TEAM.name||'the store')} yet</h2>
+    <p class="note" style="font-size:17px;margin:0">You're view only. Once the owner or a manager uploads the sales, they show up here by themselves.</p></section>`;
   return `<section class="card rv" style="--d:0;padding:28px 24px;display:grid;gap:14px;justify-items:start">
     <h2 style="font-size:clamp(30px,5vw,46px);margin:0">Upload your sales to get started</h2>
     <p class="note" style="font-size:17px;margin:0;max-width:62ch">Export the 15-minute sales report from your POS as a CSV and upload it. Four or more of each weekday gives the best forecast. Everything stays on this device${CLOUD?' unless you sign in to save it to the cloud':''}.</p>
@@ -1344,8 +1359,8 @@ function render(animate=true){
     document.body.classList.remove('tvmode');TV=false;clearInterval(timer);clearInterval(tick);
     $('daySel').innerHTML='<option value="all">No days yet</option>';$('seg').dataset.mode=MODE;
     $('mSched').setAttribute('aria-pressed',MODE==='sched');$('mFloor').setAttribute('aria-pressed',MODE==='floor');
-    $('app').innerHTML=emptyState();$('emptyUpload').onclick=()=>$('csvFile').click();
-    $('trySample').onclick=()=>{DATA=makeSample();save('rf_usesample',1);DAY=null;render();toast('Sample data. Upload your own any time; it won\'t mix in.')};
+    $('app').innerHTML=emptyState();if($('emptyUpload'))$('emptyUpload').onclick=()=>$('uploadBtn').click();
+    if($('trySample'))$('trySample').onclick=()=>{DATA=makeSample();save('rf_usesample',1);DAY=null;render();toast('Sample data. Upload your own any time; it won\'t mix in.')};
     if($('dataCheck').open)renderDataCheck();return}
   const opts=dayOptions();
   if(DAY==null||!opts.some(o=>o.v===DAY)){const today=String(new Date().getDay());DAY=opts.some(o=>o.v===today)?today:opts[0].v}
@@ -1414,7 +1429,7 @@ function renderDataCheck(){
   box.innerHTML=`<p class="note" style="margin-top:0">Hold the <b>Sales</b> column up against your POS daily sales report. Store hours ${fmtShort(o)}–${fmtShort(c)}${flagged?` · <b class="meh">${flagged} day${flagged>1?'s':''} worth a look</b>`:' · <b class="good">nothing looks off</b>'}.</p>
     ${files}
     <div class="tablewrap"><table class="dct"><thead><tr><th>Date</th><th>Day</th><th>Sales</th><th>Left out</th><th>15s</th><th>First – last sale</th><th>Check</th></tr></thead><tbody>
-    ${days.map(d=>{const off=(S.skipDays||[]).includes(d.key);return `<tr style="${off?'opacity:.5':''}"><td data-l="Date"><b>${esc(d.key)}</b></td><td data-l="Day">${d.wd!=null?WD[d.wd].slice(0,3):'?'}</td><td data-l="Sales">${money(d.inS)}</td><td data-l="Left out" class="rng">${d.outS?money(d.outS):'–'}</td><td data-l="15s">${d.n}</td><td data-l="Hours">${d.n?`${fmtShort(d.first)} – ${fmtShort(d.last+15)}`:'–'}</td><td data-l="">${off?'<span class="flag">Left out of the forecast</span>':d.flags.map(([k,t])=>`<span class="flag ${k}">${t}</span>`).join('')||'<span class="flag ok">Looks right</span>'} <button class="btn dcskip" type="button" data-key="${esc(d.key)}" style="min-height:34px;padding:4px 12px;font-size:13px">${off?'Use it':'Leave out'}</button></td></tr>`}).join('')}
+    ${days.map(d=>{const off=(S.skipDays||[]).includes(d.key);return `<tr style="${off?'opacity:.5':''}"><td data-l="Date"><b>${esc(d.key)}</b></td><td data-l="Day">${d.wd!=null?WD[d.wd].slice(0,3):'?'}</td><td data-l="Sales">${money(d.inS)}</td><td data-l="Left out" class="rng">${d.outS?money(d.outS):'–'}</td><td data-l="15s">${d.n}</td><td data-l="Hours">${d.n?`${fmtShort(d.first)} – ${fmtShort(d.last+15)}`:'–'}</td><td data-l="">${off?'<span class="flag">Left out of the forecast</span>':d.flags.map(([k,t])=>`<span class="flag ${k}">${t}</span>`).join('')||'<span class="flag ok">Looks right</span>'} <button class="btn dcskip" type="button" ${canEditUI()?'':'hidden'} data-key="${esc(d.key)}" style="min-height:34px;padding:4px 12px;font-size:13px">${off?'Use it':'Leave out'}</button></td></tr>`}).join('')}
     </tbody></table></div>
     <div class="controls" style="margin-top:12px;padding-bottom:16px"><button class="btn" id="dcCopy" type="button">Copy report</button><span class="note">Paste it to whoever's helping you check the numbers.</span></div>`;
   $('dcCopy').onclick=()=>copyText(dataCheckText(),$('dcCopy'),'Data check copied');
@@ -1430,11 +1445,48 @@ $('dataChip').onclick=$('dataChip').onkeydown=e=>{if(e.type==='keydown'&&e.key!=
 $('dataCheck').addEventListener('toggle',()=>{if($('dataCheck').open)renderDataCheck()});
 
 /* ===== cloud save: the Firebase module at the bottom fills in CLOUD once it's configured ===== */
-let CLOUD=null,USER=null;
+let CLOUD=null,USER=null,TEAM=null,ROLE=null,STORES=[];
+const canEditUI=()=>!USER||!TEAM||TEAM.none||ROLE!=='viewer';
+const isOwnerUI=()=>!USER||!TEAM||TEAM.none||ROLE==='owner';
+const TEAM_RULES=`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function me() { return request.auth.token.email.lower(); }
+    function onTeam(st) { return st.ownerUid == request.auth.uid || me() in st.managers || me() in st.viewers; }
+    function store(sid) { return get(/databases/$(database)/documents/stores/$(sid)).data; }
+    function isOwner(sid) { return signedIn() && store(sid).ownerUid == request.auth.uid; }
+    function canEdit(sid) { return isOwner(sid) || (signedIn() && me() in store(sid).managers); }
+    function canView(sid) { return signedIn() && onTeam(store(sid)); }
+
+    // each person's own space (from before store teams)
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // a store: only its team can see it, only the owner can change the team
+    match /stores/{sid} {
+      allow read: if signedIn() && onTeam(resource.data);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.managers is list && request.resource.data.viewers is list;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.managers is list && request.resource.data.viewers is list;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      // sales, settings, positions: the team sees them; owner and managers change them; only the owner deletes.
+      // {sub} makes this cover only what's inside the store, never the store record (the team list) itself
+      match /{sub}/{document=**} {
+        allow read: if canView(sid);
+        allow create, update: if canEdit(sid);
+        allow delete: if isOwner(sid);
+      }
+    }
+  }
+}
+`;
 const dayId=key=>'d_'+String(key).replace(/[^A-Za-z0-9_-]/g,'-');
 function rowsToDays(rows){const by={};rows.forEach(r=>{const d=by[r[0]]||(by[r[0]]={key:r[0],wd:r[1],dn:r[5],m:[],s:[],t:[]});d.m.push(r[2]);d.s.push(r[3]);d.t.push(r[4]??null)});return Object.values(by)}
 function daysToRows(days){return days.flatMap(d=>d.m.map((m,i)=>[d.key,d.wd??null,m,d.s[i],d.t?.[i]??null,d.dn??null]))}
-function syncChip(state){const c=$('syncChip');if(!USER){c.hidden=true;return}c.hidden=false;
+function syncChip(state){const c=$('syncChip');if(!USER||!TEAM||TEAM.none){c.hidden=true;return}c.hidden=false;
   const L={saving:['saving','Saving…'],offline:['saving','Offline · will sync'],saved:['saved','Saved to cloud'],error:['off','Cloud save failed']}[state]||['saved','Saved to cloud'];
   c.className='chip '+L[0];c.textContent=L[1]}
 window.RF={
@@ -1443,15 +1495,70 @@ window.RF={
     // a different person signing in on a shared iPad starts from their own cloud data, not the last person's
     if(user){const owner=load('rf_owner');if(owner&&owner!==user.uid&&!DATA.sample){DATA=EMPTY();drop('rf_data2');DAY=null;render(false)}save('rf_owner',user.uid)}
     b.textContent=user?`${(user.displayName||user.email||'Signed in').split(' ')[0]} · Sign out`:'Sign in to save';
-    b.classList.toggle('primary',!user);syncChip('saving')},
+    b.classList.toggle('primary',!user);if(!user){TEAM=null;ROLE=null;STORES=[]}applyRole();syncChip('saving')},
+  store(info){
+    // switching to a different store on this device starts from that store's data, not the last one's
+    const id=info.personal?'u:'+USER.uid:info.id,prev=load('rf_store_local');
+    if(prev&&prev!==id&&!DATA.sample&&DATA.rows.length){DATA=EMPTY();drop('rf_data2');DAY=null}
+    save('rf_store_local',id);
+    const was=TEAM&&TEAM.id;TEAM=info;ROLE=info.role;applyRole();if(was!==info.id)render(false)},
+  stores(list){STORES=list;renderTeam()},
+  noStore(email){TEAM={none:true,email};ROLE=null;applyRole();render(false);const t=$('teamBox');t.open=true;
+    toast(`Signed in. Ask your store owner to add ${email} to the team.`)},
+  kicked(){toast('You\'re not on that store\'s team anymore',true);DATA=EMPTY();drop('rf_data2');drop('rf_store_local');TEAM=null;ROLE=null;DAY=null;applyRole();render(false)},
   localRows(){return DATA.sample?[]:DATA.rows},
-  cloudRows(rows){if(!rows.length)return;DATA={name:'',sample:false,rows};save('rf_data2',DATA);render(false)},
+  cloudRows(rows,storeIsEmpty){if(!rows.length){if(storeIsEmpty&&!DATA.sample&&DATA.rows.length){DATA=EMPTY();drop('rf_data2');render(false)}return}
+    DATA={name:'',sample:false,rows};save('rf_data2',DATA);render(false)},
   cloudSettings(cs){const n=Object.assign({},DEF,cs);if(JSON.stringify(n)===JSON.stringify(S))return;S=n;save('rf_settings',S);fillSettings();render(false)},
   cloudPositions(p){const n=normPos(p);if(JSON.stringify(n)===JSON.stringify(POS))return;POS=n;save('rf_positions',POS);if(!EDITPOS)render(false)},
   localPositions:()=>posCustom()?POS:null,
   sync:syncChip,
-  error(e){console.error(e);syncChip('error');toast(e&&e.code==='permission-denied'?'Cloud said no. Check the Firestore rules.':'Cloud save hit a problem. Your data is still on this device.',true)}
+  error(e){console.error(e);syncChip('error');toast(e&&e.code==='permission-denied'?'Cloud said no. Check the Firestore rules.':e&&e.code==='not-owner'?e.message:'Cloud save hit a problem. Your data is still on this device.',true)}
 };
+/* ---- store team panel ---- */
+function applyRole(){
+  const view=!canEditUI();
+  $('storeName').textContent=TEAM&&TEAM.name?TEAM.name:'Hueytown #06123';
+  document.querySelectorAll('#settingsBox .form input,#settingsBox .form select,#resetSettings').forEach(x=>x.disabled=view);
+  $('useSample').hidden=!isOwnerUI();
+  $('uploadBtn').title=view?'View only':'';
+  renderTeam();
+}
+function renderTeam(){
+  const box=$('teamBox'),body=$('teamBody');if(!box)return;
+  if(!USER){box.hidden=true;return}box.hidden=false;
+  if(!TEAM){body.innerHTML='<p class="note">Finding your store…</p>';return}
+  if(TEAM.none){body.innerHTML=`<p class="note" style="margin-top:0">You're signed in as <b>${esc(TEAM.email)}</b>, but no store has added you yet.</p>
+    <p class="note">Ask your store owner to open <b>Store team</b> on their device and add <b>${esc(TEAM.email)}</b>. It'll show up here by itself once they do. Sign out and back in if it doesn't.</p>
+    <div class="controls" style="padding-bottom:16px"><button class="btn" type="button" id="tmOwn">Start my own store instead</button></div>`;
+    $('tmOwn').onclick=()=>{if(confirm('Start a new store with you as the owner?'))CLOUD.startOwnStore().catch(RF.error)};return}
+  if(TEAM.personal){body.innerHTML=`<p class="note" style="margin-top:0">Your sales are saving to your own account. To share them with a team, publish the updated database rules: Firebase console → <b>Firestore Database</b> → <b>Rules</b>, replace everything with the text below, then <b>Publish</b> and sign in again.</p>
+    <pre class="fmt" style="white-space:pre-wrap">${esc(TEAM_RULES)}</pre><div class="controls" style="padding-bottom:16px"><button class="btn" type="button" id="tmRules">Copy the rules</button></div>`;
+    $('tmRules').onclick=()=>copyText(TEAM_RULES,$('tmRules'),'Rules copied');return}
+  const own=ROLE==='owner',R={owner:'Owner',manager:'Manager',viewer:'View only'};
+  const row=(em,role)=>`<div class="tmr"><span class="em">${esc(em)}${em===TEAM.email?' (you)':''}</span>${own&&role!=='owner'?
+    `<select data-em="${esc(em)}" aria-label="Role for ${esc(em)}"><option value="manager" ${role==='manager'?'selected':''}>Manager</option><option value="viewer" ${role==='viewer'?'selected':''}>View only</option></select><button class="btn" type="button" data-rm="${esc(em)}">Remove</button>`
+    :`<span class="role ${role}">${R[role]}</span>`}</div>`;
+  const members=[row(TEAM.ownerEmail||'owner','owner'),...(TEAM.managers||[]).map(e=>row(e,'manager')),...(TEAM.viewers||[]).map(e=>row(e,'viewer'))].join('');
+  body.innerHTML=`<p class="note" style="margin-top:0">${own?'You own this store.':`You're a <b>${R[ROLE].toLowerCase()}</b> on this store.`} Everyone below sees the same sales, positions and settings. ${ROLE==='viewer'?'View only can\'t upload or change anything.':''}</p>
+    ${own?`<div class="tadd"><input id="tmName" maxlength="60" value="${esc(TEAM.name||'')}" aria-label="Store name"><button class="btn" type="button" id="tmRename">Save name</button></div>`:''}
+    ${STORES.length>1?`<div class="tadd"><select id="tmSwitch" aria-label="Switch store" style="flex:1 1 220px">${STORES.map(x=>`<option value="${esc(x.id)}" ${x.id===TEAM.id?'selected':''}>${esc(x.name)} · ${R[x.role]}</option>`).join('')}</select></div>`:''}
+    <div class="tm">${members}</div>
+    ${own?`<p class="label" style="margin:0 0 6px">Add someone</p>
+    <div class="tadd"><input id="tmEmail" type="email" placeholder="their Gmail address" autocomplete="off" aria-label="Email to add"><select id="tmRole" aria-label="Role"><option value="manager">Manager: can upload and edit</option><option value="viewer">View only</option></select><button class="btn primary" type="button" id="tmAdd">Add</button></div>
+    <div class="controls" style="padding-bottom:16px"><button class="btn" type="button" id="tmInvite">Copy invite message</button><span class="note">Managers can upload sales and edit positions and settings. View only is good for the kitchen tablet.</span></div>`:'<div style="padding-bottom:16px"></div>'}`;
+  if($('tmSwitch'))$('tmSwitch').onchange=e=>CLOUD.switchStore(e.target.value);
+  if(!own)return;
+  $('tmRename').onclick=()=>CLOUD.renameStore($('tmName').value).then(()=>toast('Store name saved')).catch(RF.error);
+  $('tmAdd').onclick=()=>{const em=$('tmEmail').value.trim().toLowerCase();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))return toast('That doesn\'t look like an email address',true);
+    if(em===TEAM.ownerEmail)return toast('That\'s you, the owner',true);
+    CLOUD.addMember(em,$('tmRole').value).then(()=>toast(`${em} added. Send them the invite message.`)).catch(RF.error)};
+  $('tmEmail').onkeydown=e=>{if(e.key==='Enter')$('tmAdd').click()};
+  body.querySelectorAll('select[data-em]').forEach(x=>x.onchange=()=>CLOUD.addMember(x.dataset.em,x.value).then(()=>toast('Role updated')).catch(RF.error));
+  body.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>{if(confirm(`Remove ${x.dataset.rm} from the team? They lose access right away.`))CLOUD.removeMember(x.dataset.rm).then(()=>toast('Removed')).catch(RF.error)});
+  $('tmInvite').onclick=()=>copyText(`You're on the ${TEAM.name||'store'} Rush Forecaster team.\nOpen https://roudic.github.io/Bussiness-Forecaster/ , tap "Sign in to save" and sign in with the Google account for the email I added. The store's sales show up by themselves.`,$('tmInvite'),'Invite copied. Paste it in a text.');
+}
 $('cloudBtn').onclick=()=>{if(!CLOUD)return;if(!USER)CLOUD.signIn();else if(confirm('Sign out? Your sales stay saved in the cloud.'))CLOUD.signOut()};
 
 /* ===== wiring ===== */
@@ -1461,14 +1568,14 @@ FIELDS.forEach(k=>$('s_'+k).addEventListener('change',e=>{const raw=e.target.val
 $('resetSettings').onclick=()=>{S=Object.assign({},DEF,{skipDays:S.skipDays||[]});save('rf_settings',S);USER&&CLOUD.saveSettings(S);fillSettings();render();toast('Settings reset')};
 $('useSample').onclick=async()=>{
   if(DATA.sample){drop('rf_usesample');DATA=load('rf_data2')||EMPTY();DAY=null;render();toast(DATA.rows.length?'Sample data off. Back to your data.':'Sample data cleared');return}
-  if(USER){if(!confirm('This deletes every day of sales you saved to the cloud, on every device. Can\'t be undone. Keep going?'))return;
+  if(USER&&TEAM&&!TEAM.none){if(!confirm(`This deletes every day of sales saved to ${TEAM.personal?'your account':TEAM.name||'the store'}, for everyone on every device. Can't be undone. Keep going?`))return;
     try{await CLOUD.deleteAll()}catch(e){RF.error(e);return}}
   else if(DATA.rows.length&&!confirm('Clear all the sales you uploaded on this device? You can upload them again any time.'))return;
   DATA=EMPTY();drop('rf_data2');drop('rf_usesample');DAY=null;$('msg').innerHTML='';render();toast('Your data is cleared')};
 $('daySel').onchange=e=>{DAY=e.target.value;SCRUB=RANGE=null;render()};
 $('mSched').onclick=()=>{if(MODE==='sched')return;EDITPOS=false;MODE='sched';save('rf_mode',MODE);render()};
 $('mFloor').onclick=()=>{if(MODE==='floor')return;MODE='floor';save('rf_mode',MODE);render()};
-$('uploadBtn').onclick=()=>$('csvFile').click();
+$('uploadBtn').onclick=()=>{if(!canEditUI())return toast('View only. Ask the store owner to make you a manager to upload.',true);$('csvFile').click()};
 function readFile(f){
   if(f.text)return f.text();
   return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsText(f)});
@@ -1514,41 +1621,99 @@ if(config)try{
   // offline cache: uploads made with no signal queue up and send when it comes back
   let db;try{db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(e){db=F.getFirestore(app)}
   if(EMU){A.connectAuthEmulator(auth,`http://${EMU}:9099`,{disableWarnings:true});F.connectFirestoreEmulator(db,EMU,8080)}
-  const days=uid=>F.collection(db,'users',uid,'days');
-  async function writeDays(list){for(let i=0;i<list.length;i+=400){const b=F.writeBatch(db);
-    list.slice(i,i+400).forEach(d=>b.set(F.doc(days(auth.currentUser.uid),dayId(d.key)),{...d,updated:F.serverTimestamp()}));await b.commit()}}
-  let stop=[];
+  /* data lives with a store, shared by its team: stores/{id} holds the team, stores/{id}/days the sales,
+     stores/{id}/meta/config the settings and positions. Before the team rules are published it falls back to
+     the signed-in person's own users/{uid} space, which is how it worked before teams. */
+  const lower=v=>String(v||'').trim().toLowerCase();
+  let cur=null,stop=[];  // cur = {id, personal, role, path}
+  const daysCol=()=>cur.personal?F.collection(db,'users',cur.id,'days'):F.collection(db,'stores',cur.id,'days');
+  const cfgRef=()=>cur.personal?F.doc(db,'users',cur.id):F.doc(db,'stores',cur.id,'meta','config');
+  const canEdit=()=>cur&&cur.role!=='viewer';
+  async function writeDaysTo(col,list){for(let i=0;i<list.length;i+=400){const b=F.writeBatch(db);
+    list.slice(i,i+400).forEach(d=>{const {updated,...rest}=d;b.set(F.doc(col,dayId(d.key)),{...rest,updated:F.serverTimestamp()})});await b.commit()}}
+  const writeDays=list=>writeDaysTo(daysCol(),list);
+  const roleIn=(st,u)=>{const em=lower(u.email);return st.ownerUid===u.uid?'owner':(st.managers||[]).includes(em)?'manager':(st.viewers||[]).includes(em)?'viewer':null};
+  async function findStores(u){const c=F.collection(db,'stores'),em=lower(u.email);
+    const res=await Promise.all([F.where('ownerUid','==',u.uid),F.where('managers','array-contains',em),F.where('viewers','array-contains',em)].map(w=>F.getDocs(F.query(c,w))));
+    const m=new Map();res.forEach(r=>r.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()})));return [...m.values()]}
+  async function createStore(u){
+    const ref=F.doc(F.collection(db,'stores'));
+    const st={name:'Hueytown #06123',ownerUid:u.uid,ownerEmail:lower(u.email),ownerName:u.displayName||'',managers:[],viewers:[],created:F.serverTimestamp()};
+    await F.setDoc(ref,st);
+    // bring anything saved to this person's own space before teams existed into the new store
+    try{const old=await F.getDocs(F.collection(db,'users',u.uid,'days'));if(old.size)await writeDaysTo(F.collection(db,'stores',ref.id,'days'),old.docs.map(d=>d.data()));
+      const ud=(await F.getDoc(F.doc(db,'users',u.uid))).data();
+      if(ud?.settings||ud?.positions)await F.setDoc(F.doc(db,'stores',ref.id,'meta','config'),{...(ud.settings?{settings:ud.settings}:{}),...(ud.positions?{positions:ud.positions}:{})},{merge:true});
+    }catch(e){console.warn('Could not move the personal copy into the store',e)}
+    return {id:ref.id,...st};
+  }
+  function listen(u){
+    stop.forEach(f=>f());stop=[];let synced=false;
+    const denied=e=>{if(e&&e.code==='permission-denied'&&!cur.personal){stop.forEach(f=>f());stop=[];cur=null;RF.kicked();boot(u)}else RF.error(e)};
+    if(!cur.personal)stop.push(F.onSnapshot(F.doc(db,'stores',cur.id),snap=>{
+      if(!snap.exists())return denied({code:'permission-denied'});
+      const st={id:snap.id,...snap.data()},role=roleIn(st,u);if(!role)return denied({code:'permission-denied'});
+      cur.role=role;RF.store({...st,role,email:lower(u.email)})},denied));
+    stop.push(F.onSnapshot(daysCol(),{includeMetadataChanges:true},snap=>{
+      RF.sync(snap.metadata.hasPendingWrites?'saving':snap.metadata.fromCache?'offline':'saved');
+      if(!synced&&!snap.metadata.fromCache){synced=true;
+        // first time on this device: push up any days it has that the store doesn't
+        const have=new Set(snap.docs.map(d=>d.data().key));
+        const mine=canEdit()?rowsToDays(RF.localRows()).filter(d=>!have.has(d.key)):[];
+        if(mine.length){writeDays(mine).catch(RF.error);return}
+        if(!snap.size)RF.cloudRows([],true)}
+      if(snap.docChanges().length)RF.cloudRows(daysToRows(snap.docs.map(d=>d.data())));
+    },denied));
+    stop.push(F.onSnapshot(cfgRef(),snap=>{const d=snap.data(),m=snap.metadata;if(m.hasPendingWrites)return;
+      if(d?.settings)RF.cloudSettings(d.settings);
+      if(d?.positions)RF.cloudPositions(d.positions);
+      else if(!m.fromCache&&canEdit()&&RF.localPositions())F.setDoc(snap.ref,{positions:RF.localPositions()},{merge:true}).catch(RF.error);
+    },denied));
+  }
+  async function open(st,u){
+    cur=st.personal?{id:u.uid,personal:true,role:'owner'}:{id:st.id,role:roleIn(st,u)};
+    try{localStorage.setItem('rf_store',cur.id)}catch(e){}
+    RF.store(st.personal?{personal:true,role:'owner',email:lower(u.email)}:{...st,role:cur.role,email:lower(u.email)});
+    listen(u);
+  }
+  async function boot(u,want){
+    let list;
+    try{list=await findStores(u)}catch(e){
+      if(e.code==='permission-denied'){console.warn('Team rules not published yet; using this account\'s own space');return open({personal:true},u)}
+      return RF.error(e)}
+    RF.stores(list.map(x=>({id:x.id,name:x.name,role:roleIn(x,u)})));
+    let saved=want;try{saved=saved||localStorage.getItem('rf_store')}catch(e){}
+    let st=list.find(x=>x.id===saved)||list.find(x=>x.ownerUid===u.uid)||list[0];
+    if(!st){
+      // nobody added this email to a store yet. Someone bringing their own data gets their own store right away
+      let mine=RF.localRows().length>0;try{mine=mine||(await F.getDocs(F.query(F.collection(db,'users',u.uid,'days'),F.limit(1)))).size>0}catch(e){}
+      if(!mine)return RF.noStore(lower(u.email));
+      st=await createStore(u);RF.stores([{id:st.id,name:st.name,role:'owner'}]);
+    }
+    open(st,u);
+  }
+  const team=(fn)=>async(...a)=>{if(!cur||cur.personal||cur.role!=='owner')throw Object.assign(new Error('Only the store owner can change the team'),{code:'not-owner'});return fn(...a)};
   RF.ready({
     async signIn(){const p=new A.GoogleAuthProvider();p.setCustomParameters({prompt:'select_account'});
       try{await A.signInWithPopup(auth,p)}catch(e){
         if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')return A.signInWithRedirect(auth,p);
         if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')RF.error(e)}},
     signOut:()=>A.signOut(auth),
-    saveRows:rows=>writeDays(rowsToDays(rows)),
-    savePositions:p=>F.setDoc(F.doc(db,'users',auth.currentUser.uid),{positions:p},{merge:true}).catch(RF.error),
-    saveSettings:s=>F.setDoc(F.doc(db,'users',auth.currentUser.uid),{settings:s},{merge:true}).catch(RF.error),
-    async deleteAll(){const snap=await F.getDocs(days(auth.currentUser.uid));
+    saveRows:rows=>canEdit()?writeDays(rowsToDays(rows)):Promise.resolve(),
+    savePositions:p=>canEdit()?F.setDoc(cfgRef(),{positions:p},{merge:true}).catch(RF.error):null,
+    saveSettings:s=>canEdit()?F.setDoc(cfgRef(),{settings:s},{merge:true}).catch(RF.error):null,
+    async deleteAll(){if(!cur||cur.role!=='owner')throw Object.assign(new Error('Only the store owner can clear the store'),{code:'not-owner'});
+      const snap=await F.getDocs(daysCol());
       for(let i=0;i<snap.docs.length;i+=400){const b=F.writeBatch(db);snap.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}},
-    ...(EMU?{testSignIn:(email)=>A.signInWithCredential(auth,A.GoogleAuthProvider.credential(JSON.stringify({sub:email,email,name:'Test Manager',email_verified:true})))}:{})
+    addMember:team(async(email,role)=>{const em=lower(email);
+      await F.updateDoc(F.doc(db,'stores',cur.id),role==='viewer'?{viewers:F.arrayUnion(em),managers:F.arrayRemove(em)}:{managers:F.arrayUnion(em),viewers:F.arrayRemove(em)})}),
+    removeMember:team(async email=>{const em=lower(email);await F.updateDoc(F.doc(db,'stores',cur.id),{managers:F.arrayRemove(em),viewers:F.arrayRemove(em)})}),
+    renameStore:team(async name=>F.updateDoc(F.doc(db,'stores',cur.id),{name:String(name).trim().slice(0,60)||'My store'})),
+    async startOwnStore(){const u=auth.currentUser;const st=await createStore(u);RF.stores([{id:st.id,name:st.name,role:'owner'}]);open(st,u)},
+    switchStore:id=>{const u=auth.currentUser;stop.forEach(f=>f());stop=[];boot(u,id)},
+    ...(EMU?{testSignIn:(email)=>A.signInWithCredential(auth,A.GoogleAuthProvider.credential(JSON.stringify({sub:email,email,name:email.split('@')[0],email_verified:true})))}:{})
   });
-  A.onAuthStateChanged(auth,user=>{
-    stop.forEach(f=>f());stop=[];RF.auth(user);if(!user)return;
-    let synced=false;
-    stop.push(F.onSnapshot(days(user.uid),{includeMetadataChanges:true},snap=>{
-      RF.sync(snap.metadata.hasPendingWrites?'saving':snap.metadata.fromCache?'offline':'saved');
-      if(!synced&&!snap.metadata.fromCache){synced=true;
-        // first time on this device: push up any days it has that the cloud doesn't
-        const have=new Set(snap.docs.map(d=>d.data().key));
-        const mine=rowsToDays(RF.localRows()).filter(d=>!have.has(d.key));
-        if(mine.length){writeDays(mine).catch(RF.error);return}}
-      if(snap.docChanges().length)RF.cloudRows(daysToRows(snap.docs.map(d=>d.data())));
-    },RF.error));
-    stop.push(F.onSnapshot(F.doc(db,'users',user.uid),snap=>{const d=snap.data(),m=snap.metadata;if(m.hasPendingWrites)return;
-      if(d?.settings)RF.cloudSettings(d.settings);
-      if(d?.positions)RF.cloudPositions(d.positions);
-      else if(!m.fromCache&&RF.localPositions())F.setDoc(snap.ref,{positions:RF.localPositions()},{merge:true}).catch(RF.error);
-    },RF.error));
-  });
+  A.onAuthStateChanged(auth,u=>{stop.forEach(f=>f());stop=[];cur=null;RF.auth(u);if(u)boot(u)});
 }catch(e){console.error('Cloud save is off:',e)}
 </script>
 
